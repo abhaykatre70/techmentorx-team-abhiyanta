@@ -1,6 +1,9 @@
 import { createContext, useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 
+// Set global timeout to 10 seconds to prevent hanging
+axios.defaults.timeout = 10000;
+
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
@@ -19,7 +22,7 @@ export const AuthProvider = ({ children }) => {
 
     const fetchProfile = async () => {
         try {
-            const res = await axios.get('http://localhost:5000/api/auth/profile');
+            const res = await axios.get('http://localhost:5001/api/auth/profile');
             setUser(res.data);
         } catch (err) {
             logout();
@@ -29,7 +32,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     const login = async (email, password) => {
-        const res = await axios.post('http://localhost:5000/api/auth/login', { email, password });
+        const res = await axios.post('http://localhost:5001/api/auth/login', { email, password });
         const { token, user } = res.data;
         localStorage.setItem('token', token);
         setToken(token);
@@ -38,7 +41,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     const register = async (userData) => {
-        const res = await axios.post('http://localhost:5000/api/auth/register', userData);
+        const res = await axios.post('http://localhost:5001/api/auth/register', userData);
         return res.data;
     };
 

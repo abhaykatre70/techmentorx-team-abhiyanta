@@ -4,11 +4,14 @@ from app.database import db
 from dotenv import load_dotenv
 import os
 
+# Load dotenv as early as possible
+load_dotenv()
+
 def create_app():
     load_dotenv()
     
     app = Flask(__name__)
-    CORS(app)
+    CORS(app, resources={r"/api/*": {"origins": "*"}})
     
     # Configuration
     app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
