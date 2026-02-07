@@ -133,7 +133,10 @@ const Dashboard = () => {
                                             <div className={`w-2 h-2 mt-2 rounded-full ${task.urgent ? 'bg-red-500' : 'bg-green-500'}`}></div>
                                             <div>
                                                 <h4 className="font-semibold text-gray-800 text-sm">{task.title}</h4>
-                                                <p className="text-xs text-gray-500">{task.description || task.location || "3.2km away"}</p>
+                                                <p className="text-xs text-gray-500">
+                                                    {task.description ? task.description + " • " : ""}
+                                                    <span className="font-medium text-green-600">{task.distance ? `${task.distance} km away` : "Nearby"}</span>
+                                                </p>
                                             </div>
                                         </div>
                                     ))}

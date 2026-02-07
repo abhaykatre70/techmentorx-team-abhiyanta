@@ -63,6 +63,12 @@ const GeoCamera = ({ onCaptureConfig }) => {
     // 4. Capture Photo
     const capturePhoto = () => {
         if (videoRef.current && canvasRef.current) {
+            // Ensure video is playing and has dimension
+            if (videoRef.current.readyState < 2) {
+                toast.error("Camera loading... please wait.");
+                return;
+            }
+
             const context = canvasRef.current.getContext('2d');
             canvasRef.current.width = videoRef.current.videoWidth;
             canvasRef.current.height = videoRef.current.videoHeight;
