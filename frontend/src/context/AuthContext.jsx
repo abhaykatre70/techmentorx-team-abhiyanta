@@ -133,18 +133,49 @@ export const AuthProvider = ({ children }) => {
     };
 
     const login = async (email, password) => {
-        const { data, error } = await supabase.auth.signInWithPassword({
-            email,
-            password
-        });
+        try {
+            // 1. Try Standard Supabase Auth
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email,
+                password
+            });
 
-        if (error) throw error;
+            if (!error && data.user) {
+                await fetchUserRole(data.user);
+                toast.success("Logged in successfully!");
+                return data;
+            }
 
-        if (data.user) {
-            await fetchUserRole(data.user);
-            toast.success("Logged in successfully!");
+            // 2. Fallback: Demo Login (Check public.users table directly)
+            // SECURITY WARNING: This is for DEMO PURPOSES ONLY to allow login with dummy users.
+            console.warn("Standard auth failed, trying Demo Login...");
+
+            const { data: demoUser, error: demoError } = await supabase
+                .from('users')
+                .select('*')
+                .eq('email', email)
+                .eq('password', password) // Checking plain text password for demo
+                .single();
+
+            if (demoUser) {
+                // Manually set session state for Demo User
+                const fakeUser = {
+                    id: demoUser.id,
+                    email: demoUser.email,
+                    user_metadata: { name: demoUser.name, role: demoUser.role }
+                };
+                setCurrentUser(fakeUser);
+                setUserRole(demoUser.role);
+                toast.success(`Welcome back, ${demoUser.name} (Demo Mode)`);
+                return { user: fakeUser };
+            }
+
+            throw error || new Error("Invalid credentials");
+
+        } catch (error) {
+            console.error("Login Error:", error);
+            throw error;
         }
-        return data;
     };
 
     const loginWithGoogle = async () => {
