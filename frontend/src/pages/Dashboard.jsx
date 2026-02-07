@@ -11,6 +11,8 @@ const Dashboard = () => {
     const { currentUser, userRole, logout } = useAuth();
     const [stats, setStats] = useState({ activeTasks: 0, pendingReports: 0, points: 0 });
     const [view, setView] = useState('overview'); // overview, map, report
+    const [tasks, setTasks] = useState([]);
+    const [loadingTasks, setLoadingTasks] = useState(true);
 
     // Dummy data fetch simulation
     useEffect(() => {
