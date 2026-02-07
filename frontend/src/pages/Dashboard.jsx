@@ -122,28 +122,62 @@ const Dashboard = () => {
                     {/* Right Column: Recent Activity / Tasks */}
                     <div className="space-y-6">
                         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                            <h3 className="font-bold text-gray-800 mb-4">Urgent Tasks Nearby</h3>
-
-                            {loadingTasks ? (
-                                <p className="text-gray-400 text-sm">Loading tasks...</p>
-                            ) : (
+                            {userRole === 'NGO' ? (
                                 <div className="space-y-4">
-                                    {tasks.map((task, i) => (
-                                        <div key={task.id || i} className="flex items-start gap-3 p-3 rounded-xl hover:bg-gray-50 transition border border-transparent hover:border-gray-100 cursor-pointer">
-                                            <div className={`w-2 h-2 mt-2 rounded-full ${task.urgent ? 'bg-red-500' : 'bg-green-500'}`}></div>
-                                            <div>
-                                                <h4 className="font-semibold text-gray-800 text-sm">{task.title}</h4>
-                                                <p className="text-xs text-gray-500">
-                                                    {task.description ? task.description + " • " : ""}
-                                                    <span className="font-medium text-green-600">{task.distance ? `${task.distance} km away` : "Nearby"}</span>
-                                                </p>
-                                            </div>
+                                    <h3 className="font-bold text-gray-800">Incoming Reports</h3>
+                                    {stats.pendingReports === 0 ? (
+                                        <p className="text-gray-500 text-sm">No new reports.</p>
+                                    ) : (
+                                        <div className="bg-red-50 text-red-700 p-4 rounded-xl border border-red-100 flex items-center justify-between">
+                                            <span><strong>{stats.pendingReports}</strong> Needy Reports Pending Review</span>
+                                            <button className="text-sm bg-white border border-red-200 px-3 py-1 rounded-lg">Review</button>
                                         </div>
-                                    ))}
+                                    )}
+                                    <button className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold shadow-md hover:bg-blue-700 transition">
+                                        <Plus className="w-5 h-5 inline mr-2" /> Create New Task
+                                    </button>
                                 </div>
-                            )}
+                            ) : (
+                                <>
+                                    <h3 className="font-bold text-gray-800 mb-4">
+                                        {userRole === 'Volunteer' ? 'Available Missions' : 'Urgent Tasks Nearby'}
+                                    </h3>
 
-                            <button className="w-full mt-4 text-green-600 text-sm font-bold hover:underline">View All Tasks</button>
+                                    {loadingTasks ? (
+                                        <div className="animate-pulse space-y-3">
+                                            <div className="h-16 bg-gray-100 rounded-xl"></div>
+                                            <div className="h-16 bg-gray-100 rounded-xl"></div>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-4">
+                                            {tasks.map((task, i) => (
+                                                <div key={task.id || i} className="flex items-start gap-3 p-3 rounded-xl hover:bg-gray-50 transition border border-transparent hover:border-gray-100 cursor-pointer group">
+                                                    <div className={`w-2 h-2 mt-2 rounded-full ${task.urgent ? 'bg-red-500' : 'bg-green-500'}`}></div>
+                                                    <div className="flex-1">
+                                                        <h4 className="font-semibold text-gray-800 text-sm group-hover:text-green-700 transition">{task.title}</h4>
+                                                        <p className="text-xs text-gray-500">
+                                                            {task.description ? task.description + " • " : ""}
+                                                            <span className="font-medium text-green-600">{task.distance ? `${task.distance} km away` : "Nearby"}</span>
+                                                        </p>
+                                                    </div>
+                                                    {userRole === 'Volunteer' && (
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); toast.success("Task Accepted! +10 Points"); }}
+                                                            className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full hover:bg-green-600 hover:text-white transition"
+                                                        >
+                                                            Accept
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    <button className="w-full mt-4 text-green-600 text-sm font-bold hover:underline">
+                                        {userRole === 'Volunteer' ? 'View All Missions' : 'View All Tasks'}
+                                    </button>
+                                </>
+                            )}
                         </div>
 
                         <div className="bg-gradient-to-br from-green-600 to-emerald-800 p-6 rounded-2xl shadow-lg text-white">
