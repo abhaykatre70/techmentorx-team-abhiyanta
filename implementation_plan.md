@@ -1,80 +1,73 @@
-# Implementation Plan - Social Mentor Platform
+# Implementation Plan - Social Mentor (Helping Hand)
 
-This document outlines the step-by-step roadmap for building the **Social Mentor** platform, a centralized donation management system connecting donors, volunteers, and beneficiaries.
+This document outlines the roadmap for building the **Social Mentor** platform, a location-based donation and volunteer management system.
 
 ## 🛠 Technology Stack
-- **Backend:** Flask (Python)
-- **Database:** MongoDB (using MongoEngine/PyMongo)
-- **Frontend:** React (Vite)
-- **Styling:** Vanilla CSS (Modern, Premium Aesthetics)
-- **Maps:** Google Maps API / Leaflet
-- **Auth:** JWT-based authentication
+- **Frontend:** React (Vite) + Tailwind CSS
+- **Backend:** Node.js + Express
+- **Database:** Firebase Firestore
+- **Auth:** Firebase Authentication (OTP/Phone)
+- **Maps:** Google Maps API
+- **Storage:** Firebase Storage
+- **Notifications:** Firebase Cloud Messaging (FCM)
 
 ---
 
 ## 📅 Phase 1: Project Foundation & Environment Setup
-- [ ] **1.1 backend/ Initial Setup**
-  - Initialize Flask environment with `venv`.
-  - Install dependencies: `flask`, `flask-cors`, `pymongo`, `mongoengine`, `PyJWT`, `bcrypt`, `python-dotenv`.
-  - Create directory structure: `app/routes`, `app/models`, `app/services`, `app/utils`.
-- [ ] **1.2 frontend/ Initial Setup**
-  - Create React app using Vite: `npx create-vite@latest frontend --template react`.
-  - Setup basic folder structure: `src/components`, `src/pages`, `src/services`, `src/hooks`, `src/context`.
-- [ ] **1.3 Database Connection**
-  - Configure MongoDB connection in `backend/app/database.py`.
-  - Setup environment variables (`.env`).
+- [ ] **1.1 Backend Setup (Node/Express)**
+  - Initialize Node.js project.
+  - Install dependencies: `express`, `cors`, `dotenv`, `firebase-admin`.
+  - Setup basic server structure.
+- [ ] **1.2 Frontend Setup (React/Tailwind)**
+  - Configure Tailwind CSS in existing Vite app.
+  - Setup specific color palette (Green Impact theme).
+  - Install dependencies: `firebase`, `react-router-dom`, `@react-google-maps/api`, `framer-motion`, `react-hot-toast`, `lucide-react`.
+- [ ] **1.3 Firebase Integration**
+  - Setup Firebase project (Console).
+  - Configure `firebase.js` in frontend and backend.
+  - Initialize Firestore and Storage buckets.
 
-## 🔐 Phase 2: Authentication & User Management
-- [ ] **2.1 Backend Auth**
-  - Implement User models (Donor, Volunteer, Beneficiary roles).
-  - Create JWT-based login, register, and profile endpoints.
-  - Implement role-based access control (RBAC) middleware.
-- [ ] **2.2 Frontend Auth**
-  - Setup `AuthContext` for global user state.
-  - Create Login/Register pages with premium UI.
-  - Implement protected routes.
+## 🔐 Phase 2: Authentication & User Roles
+- [ ] **2.1 Role-Based Auth Flow**
+  - Implement Login/Signup with Phone OTP (or Email fallback for dev).
+  - Role selection screen: **Donor**, **Volunteer**, **NGO**.
+  - Store user profiles in Firestore `users` collection.
+- [ ] **2.2 Protected Routes**
+  - Create Role-based Route Guards.
+  - Dashboard redirection based on role.
 
-## 📦 Phase 3: Donation Management System
-- [ ] **3.1 Backend Donation CRUD**
-  - Create Donation schema with GeoJSON support for location.
-  - Endpoints for creating, listing, updating, and deleting donations.
-  - Image upload support (local storage or Cloudinary/S3).
-- [ ] **3.2 Frontend Donation UI**
-  - Create "Post a Donation" form.
-  - Build a responsive "Donation Feed" with cards and filters.
-  - Detailed donation view with maps.
+## 📦 Phase 3: Core Features (MVP)
+- [ ] **3.1 Maps & Location**
+  - Integrate Google Maps.
+  - Implement Geolocation API to get user position.
+  - Display pins for NGOs, Tasks, and Pickup points.
+- [ ] **3.2 Donation Module (Donor)**
+  - "Post Donation" form (Food, Clothes, Books).
+  - Upload photos (Firebase Storage).
+  - Choose delivery method: Self-drop vs. Volunteer Pickup.
+- [ ] **3.3 Volunteer Tasks**
+  - View nearby pickup/delivery requests.
+  - Accept task -> Update status -> Complete task.
+  - Geo-tagging verification (End-to-end tracking).
+- [ ] **3.4 NGO Dashboard**
+  - View incoming donations.
+  - Manage inventory/needs.
+  - Verify volunteers.
 
-## 📍 Phase 4: Location-Based Features & Volunteer Workflow
-- [ ] **4.1 Maps Integration**
-  - Integrate Mapbox or Leaflet for location picking and proximity view.
-  - Implement backend geospatial queries to find nearby donations.
-- [ ] **4.2 Volunteer Coordination**
-  - Donation "Request to Collect" workflow.
-  - Donor dashboard to manage volunteer requests.
-  - Status updates: `available` -> `requested` -> `collected` -> `distributed`.
-
-## 🏆 Phase 5: Gamification & Impact Tracking
-- [ ] **5.1 Points System**
-  - Implement service to award points for donations and successful distributions.
-  - Achievement system backend (badges/milestones).
-- [ ] **5.2 Impact Dashboard**
-  - Visualizations for "Items Distributed" and "Beneficiaries Reached".
-  - Leaderboards for top donors and volunteers.
-- [ ] **5.3 Certificates**
-  - Automated PDF certificate generation using `reportlab`.
-
-## ✨ Phase 6: Design Polish & Finalization
-- [ ] **6.1 UI/UX Refinement**
-  - Apply rich aesthetics: glassmorphism, smooth transitions, and custom typography.
-  - Ensure full responsiveness across devices.
-- [ ] **6.2 Testing & Debugging**
-  - Perform integration tests for the full donation-to-distribution lifecycle.
-- [ ] **6.3 Deployment**
-  - Prepare for deployment (e.g., Gunicorn for backend, Vercel/Netlify for frontend).
-
----
+## 📸 Phase 4: Advanced Features
+- [ ] **4.1 Geo-tagged Reporting**
+  - Camera integration for "Needy Reports".
+  - Auto-attach GPS coordinates.
+- [ ] **4.2 Food Waste Network**
+  - Urgent alerts for surplus food.
+  - Fast-track notification system.
+- [ ] **4.3 Impact & Gamification**
+  - Points system logic.
+  - Leaderboard implementation.
+  - Certificate generation.
 
 ## 🚀 Immediate Next Steps
-1. Initialize the `backend/` and `frontend/` directories.
-2. Setup the backend virtual environment and basic Flask shell.
-3. Configure the MongoDB connection.
+1.  Re-initialize `backend` with Node.js.
+2.  Install Tailwind CSS in `frontend`.
+3.  Setup Firebase Configuration files.
+4.  Scaffold the folder structure for the new stack.

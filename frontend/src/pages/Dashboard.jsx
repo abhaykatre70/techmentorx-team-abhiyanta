@@ -1,273 +1,210 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import {
-    Container, Grid, Typography, Box, Button, Card, CardContent,
-    Chip, Stack, IconButton, Fab, ToggleButton, ToggleButtonGroup,
-    Skeleton, Avatar, useTheme, useMediaQuery, Paper
-} from '@mui/material';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useAuth } from '../context/AuthContext';
-import DonationForm from '../components/DonationForm';
-import DonationMap from '../components/DonationMap';
-import DonationDetails from '../components/DonationDetails';
-import AddIcon from '@mui/icons-material/Add';
-import GridViewIcon from '@mui/icons-material/GridView';
-import MapIcon from '@mui/icons-material/Map';
-import LocationOnIcon from '@mui/icons-material/LocationOn';
-import FilterListIcon from '@mui/icons-material/FilterList';
-import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import React, { useState } from 'react';
+import { LogOut, MapPin, Package, Camera, X } from 'lucide-react';
+import MapComponent from '../components/MapComponent';
+import toast, { Toaster } from 'react-hot-toast';
 
 const Dashboard = () => {
-    const [donations, setDonations] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [selectedDonation, setSelectedDonation] = useState(null);
-    const [showForm, setShowForm] = useState(false);
-    const [viewMode, setViewMode] = useState('grid');
-    const [nearbyOnly, setNearbyOnly] = useState(false);
-    const { user } = useAuth();
-    const theme = useTheme();
-    const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+    // Mock user role - in real app, get from Context
+    const userRole = 'Donor';
+    const [needs, setNeeds] = useState([
+        { id: 1, title: 'Winter Clothes Request', ngo: 'Helping Hands', dist: '2km', type: 'clothes' },
+        { id: 2, title: 'Dry Ration Needed', ngo: 'Food For All', dist: '5km', type: 'food' },
+        { id: 3, title: 'Textbooks for Kids', ngo: 'EduCare', dist: '3.5km', type: 'education' },
+    ]);
 
-    const fetchDonations = async (coords = null) => {
-        setLoading(true);
-        try {
-            let url = 'http://localhost:5001/api/donations/';
-            if (nearbyOnly) {
-                const lat = coords?.latitude || 20.5937;
-                const lon = coords?.longitude || 78.9629;
-                url = `http://localhost:5001/api/donations/nearby?lat=${lat}&lon=${lon}&radius=50`;
-            }
-            const res = await axios.get(url);
-            setDonations(res.data.donations);
-        } catch (err) {
-            console.error('Failed to fetch donations', err);
-        } finally {
-            setLoading(false);
+    const [isReporting, setIsReporting] = useState(false);
+    const [reportImage, setReportImage] = useState(null);
+    const [reportLocation, setReportLocation] = useState(null);
+
+    const handleFileChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setReportImage(reader.result);
+                setIsReporting(true);
+                // Simulate getting location
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                        setReportLocation({
+                            lat: pos.coords.latitude,
+                            lng: pos.coords.longitude
+                        });
+                        toast.success("Location captured!");
+                    },
+                    (err) => toast.error("Could not get location")
+                );
+            };
+            reader.readAsDataURL(file);
         }
     };
 
-    useEffect(() => {
-        if (nearbyOnly) {
-            if ("geolocation" in navigator) {
-                navigator.geolocation.getCurrentPosition(
-                    (position) => fetchDonations(position.coords),
-                    (error) => {
-                        console.warn("Geolocation denied, using default coords");
-                        fetchDonations();
-                    }
-                );
-            } else {
-                fetchDonations();
-            }
-        } else {
-            fetchDonations();
-        }
-    }, [nearbyOnly]);
+    const submitReport = () => {
+        // Here we would send data to backend
+        const newReport = {
+            id: Date.now(),
+            title: 'Needy Person Reported',
+            ngo: 'Pending Verification',
+            dist: 'Nearby (You)',
+            type: 'urgent'
+        };
 
-    const getPriorityColor = (priority) => {
-        switch (priority) {
-            case 'urgent': return '#ef4444';
-            case 'high': return '#f59e0b';
-            case 'medium': return '#3b82f6';
-            default: return '#10b981';
-        }
+        setNeeds([newReport, ...needs]);
+        setIsReporting(false);
+        setReportImage(null);
+        toast.custom((t) => (
+            <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-md w-full bg-white shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-black ring-opacity-5`}>
+                <div className="flex-1 w-0 p-4">
+                    <div className="flex items-start">
+                        <div className="flex-shrink-0 pt-0.5">
+                            <img className="h-10 w-10 rounded-full" src={reportImage} alt="" />
+                        </div>
+                        <div className="ml-3 flex-1">
+                            <p className="text-sm font-medium text-gray-900">Report Sent!</p>
+                            <p className="mt-1 text-sm text-gray-500">Nearby NGOs have been notified of this location.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        ));
     };
 
     return (
-        <Box sx={{ bgcolor: '#f8fafc', minHeight: '100vh', pb: 10 }}>
-            {/* Header / Stats Bar */}
-            <Box sx={{ bgcolor: 'white', borderBottom: '1px solid rgba(0,0,0,0.05)', py: 6, mb: 6 }}>
-                <Container maxWidth="lg">
-                    <Grid container spacing={4} alignItems="flex-end">
-                        <Grid item xs={12} md={7}>
-                            <Typography variant="overline" color="primary" sx={{ fontWeight: 800, letterSpacing: 2 }}>COMMUNITY HUB</Typography>
-                            <Typography variant="h2" sx={{ fontWeight: 900, mt: 1, mb: 1, letterSpacing: -1 }}>Active Needs</Typography>
-                            <Typography variant="h6" color="text.secondary" fontWeight={400}>Hey {user?.fullName?.split(' ')[0] || 'Hero'}, here is what's happening in your area today.</Typography>
-                        </Grid>
-                        <Grid item xs={12} md={5}>
-                            <Stack direction="row" spacing={isMobile ? 1 : 2} justifyContent={isMobile ? 'flex-start' : 'flex-end'}>
-                                <ToggleButtonGroup
-                                    value={viewMode}
-                                    exclusive
-                                    onChange={(e, val) => val && setViewMode(val)}
-                                    size="medium"
-                                    sx={{ bgcolor: '#f1f5f9', p: 0.5, borderRadius: 3, '& .MuiToggleButton-root': { border: 'none', borderRadius: 2.5, px: 3 } }}
+        <div className="min-h-screen bg-gray-50 font-poppins text-gray-800">
+            <Toaster position="top-center" />
+            {/* Navbar Removed - Handled Globally */}
+
+            {/* Main Content */}
+            <main className="p-4 md:p-8 max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+                {/* Sidebar / Stats */}
+                <div className="space-y-6">
+                    {/* Stats Cards */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                            <h3 className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-2">Total Impact</h3>
+                            <p className="text-3xl font-extrabold text-green-600">12</p>
+                            <p className="text-xs text-green-600 mt-1">+2 this week</p>
+                        </div>
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                            <h3 className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-2">My Points</h3>
+                            <p className="text-3xl font-extrabold text-yellow-500">450</p>
+                            <p className="text-xs text-yellow-600 mt-1">Silver Badge</p>
+                        </div>
+                    </div>
+
+                    {/* Nearby Needs List */}
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 h-[500px] flex flex-col">
+                        <h3 className="font-bold text-lg mb-4 text-gray-800">Nearby Needs</h3>
+                        <div className="space-y-4 overflow-y-auto pr-2 flex-grow custom-scrollbar">
+                            {needs.map((item) => (
+                                <div key={item.id} className="flex items-center gap-4 p-4 border border-gray-100 rounded-xl hover:bg-green-50/50 cursor-pointer transition duration-200 group">
+                                    <div className={`p-3 rounded-xl flex-shrink-0 ${item.type === 'food' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>
+                                        <Package className="w-6 h-6" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <h4 className="font-semibold text-gray-900 truncate">{item.title}</h4>
+                                        <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
+                                            <MapPin className="w-3 h-3" /> {item.ngo} • <span className="text-green-600 font-medium">{item.dist}</span>
+                                        </p>
+                                    </div>
+                                    <button className="opacity-0 group-hover:opacity-100 px-3 py-1 text-xs bg-green-600 text-white rounded-lg transition-all transform scale-90 group-hover:scale-100">
+                                        Help
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Main Action Area */}
+                <div className="lg:col-span-2 space-y-6">
+                    {/* Quick Actions */}
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        <button className="bg-gradient-to-br from-green-500 to-green-600 text-white p-6 rounded-2xl flex flex-col items-center justify-center gap-3 hover:shadow-lg hover:-translate-y-1 transition duration-300">
+                            <div className="bg-white/20 p-3 rounded-full">
+                                <Package className="w-8 h-8" />
+                            </div>
+                            <span className="font-semibold">Donate Item</span>
+                        </button>
+
+                        <label className="bg-gradient-to-br from-red-500 to-red-600 text-white p-6 rounded-2xl flex flex-col items-center justify-center gap-3 hover:shadow-lg hover:-translate-y-1 transition duration-300 cursor-pointer relative overflow-hidden group">
+                            <div className="absolute inset-0 bg-black/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
+                            <div className="bg-white/20 p-3 rounded-full relative z-10">
+                                <Camera className="w-8 h-8" />
+                            </div>
+                            <span className="font-semibold relative z-10">Report Needy</span>
+                            <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileChange} />
+                        </label>
+
+                        <button className="bg-gradient-to-br from-blue-500 to-blue-600 text-white p-6 rounded-2xl flex flex-col items-center justify-center gap-3 hover:shadow-lg hover:-translate-y-1 transition duration-300 md:col-span-1 col-span-2">
+                            <div className="bg-white/20 p-3 rounded-full">
+                                <MapPin className="w-8 h-8" />
+                            </div>
+                            <span className="font-semibold">Volunteer Map</span>
+                        </button>
+                    </div>
+
+                    {/* Map View */}
+                    <div className="bg-white p-1 rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                        <div className="p-4 border-b border-gray-100 flex justify-between items-center">
+                            <h3 className="font-bold text-lg flex items-center gap-2">
+                                <MapPin className="w-5 h-5 text-green-600" /> Live Impact Map
+                            </h3>
+                            <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full animate-pulse">
+                                ● Live Updates
+                            </span>
+                        </div>
+                        <div className="h-[400px] w-full relative">
+                            <MapComponent />
+                        </div>
+                    </div>
+                </div>
+            </main>
+
+            {/* Report Modal */}
+            {isReporting && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden relative">
+                        <button
+                            onClick={() => setIsReporting(false)}
+                            className="absolute top-4 right-4 p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+
+                        <div className="p-6">
+                            <h3 className="text-2xl font-bold mb-2">Report Needy Person</h3>
+                            <p className="text-gray-500 text-sm mb-6">Your report helps NGOs reach the right place.</p>
+
+                            <div className="relative aspect-video bg-gray-100 rounded-xl overflow-hidden mb-6 border-2 border-dashed border-gray-300">
+                                {reportImage && <img src={reportImage} alt="Report" className="w-full h-full object-cover" />}
+                            </div>
+
+                            <div className="space-y-4">
+                                <div className="flex items-center gap-3 text-sm text-gray-600 bg-green-50 p-3 rounded-lg border border-green-100">
+                                    <MapPin className="w-5 h-5 text-green-600" />
+                                    {reportLocation ? (
+                                        <span>Lat: {reportLocation.lat.toFixed(4)}, Lng: {reportLocation.lng.toFixed(4)}</span>
+                                    ) : (
+                                        <span className="animate-pulse">Fetching Location...</span>
+                                    )}
+                                </div>
+
+                                <button
+                                    onClick={submitReport}
+                                    disabled={!reportLocation}
+                                    className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white font-bold py-4 rounded-xl transition shadow-lg hover:shadow-xl active:scale-95"
                                 >
-                                    <ToggleButton value="grid" sx={{ '&.Mui-selected': { bgcolor: 'white !important', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' } }}>
-                                        <GridViewIcon sx={{ mr: 1, fontSize: 20 }} /> Grid
-                                    </ToggleButton>
-                                    <ToggleButton value="map" sx={{ '&.Mui-selected': { bgcolor: 'white !important', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' } }}>
-                                        <MapIcon sx={{ mr: 1, fontSize: 20 }} /> Map
-                                    </ToggleButton>
-                                </ToggleButtonGroup>
+                                    Submit Report
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
-                                <Button
-                                    variant={nearbyOnly ? "contained" : "outlined"}
-                                    onClick={() => setNearbyOnly(!nearbyOnly)}
-                                    startIcon={<LocationOnIcon />}
-                                    sx={{
-                                        borderRadius: 3,
-                                        px: 3,
-                                        fontWeight: 700,
-                                        borderWidth: 2,
-                                        '&:hover': { borderWidth: 2 }
-                                    }}
-                                >
-                                    Nearby
-                                </Button>
-                            </Stack>
-                        </Grid>
-                    </Grid>
-                </Container>
-            </Box>
-
-            <Container maxWidth="lg">
-                <AnimatePresence>
-                    {showForm && (
-                        <Box component={motion.div} initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} sx={{ mb: 8 }}>
-                            <Paper elevation={0} sx={{ p: 5, borderRadius: 8, border: '2px dashed rgba(255,107,107,0.3)', bgcolor: 'rgba(255,107,107,0.02)' }}>
-                                <DonationForm onComplete={() => { setShowForm(false); fetchDonations(); }} />
-                            </Paper>
-                        </Box>
-                    )}
-                </AnimatePresence>
-
-                {loading ? (
-                    <Grid container spacing={4}>
-                        {[1, 2, 3, 4, 5, 6].map(i => (
-                            <Grid item xs={12} sm={6} md={4} key={i}>
-                                <Skeleton variant="rectangular" height={300} sx={{ borderRadius: 8 }} />
-                            </Grid>
-                        ))}
-                    </Grid>
-                ) : viewMode === 'map' ? (
-                    <Box sx={{ height: 650, borderRadius: 10, overflow: 'hidden', boxShadow: '0 40px 80px rgba(0,0,0,0.1)', border: '1px solid rgba(0,0,0,0.05)' }}>
-                        <DonationMap donations={donations} onSelect={setSelectedDonation} />
-                    </Box>
-                ) : (
-                    <Grid container spacing={4}>
-                        {donations.length > 0 ? (
-                            donations.map((donation, idx) => (
-                                <Grid item xs={12} sm={6} md={4} key={donation.id || idx}>
-                                    <Card
-                                        component={motion.div}
-                                        whileHover={{ y: -10 }}
-                                        layout
-                                        sx={{
-                                            height: '100%',
-                                            borderRadius: 8,
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            border: '1px solid rgba(0,0,0,0.05)',
-                                            boxShadow: '0 10px 30px rgba(0,0,0,0.03)',
-                                            overflow: 'visible',
-                                            position: 'relative'
-                                        }}
-                                    >
-                                        <Box sx={{
-                                            position: 'absolute',
-                                            top: -12,
-                                            left: 24,
-                                            zIndex: 2,
-                                            px: 2, py: 0.5,
-                                            borderRadius: 2,
-                                            bgcolor: getPriorityColor(donation.priority),
-                                            color: 'white',
-                                            fontSize: '0.75rem',
-                                            fontWeight: 900,
-                                            textTransform: 'uppercase',
-                                            boxShadow: '0 8px 16px rgba(0,0,0,0.1)'
-                                        }}>
-                                            {donation.priority || 'medium'}
-                                        </Box>
-
-                                        <CardContent sx={{ flexGrow: 1, p: 4, pt: 5 }}>
-                                            <Typography variant="h5" sx={{ fontWeight: 900, mb: 1.5, letterSpacing: -0.5 }}>{donation.title}</Typography>
-                                            <Typography variant="body2" color="text.secondary" sx={{
-                                                mb: 3,
-                                                display: '-webkit-box',
-                                                WebkitLineClamp: 3,
-                                                WebkitBoxOrient: 'vertical',
-                                                overflow: 'hidden',
-                                                lineHeight: 1.6
-                                            }}>
-                                                {donation.description}
-                                            </Typography>
-
-                                            <Stack direction="row" spacing={1} sx={{ mb: 4 }}>
-                                                <Chip label={donation.category} size="small" sx={{ fontWeight: 700, bgcolor: '#f1f5f9' }} />
-                                                <Chip label={`${donation.quantity} ${donation.unit}`} size="small" sx={{ fontWeight: 700, bgcolor: '#f1f5f9' }} />
-                                            </Stack>
-
-                                            <Box sx={{ mt: 'auto', pt: 3, borderTop: '1px solid #f1f5f9' }}>
-                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3 }}>
-                                                    <Avatar sx={{ width: 24, height: 24, bgcolor: 'primary.main', fontSize: '0.7rem' }}>📍</Avatar>
-                                                    <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.primary' }}>{donation.address}</Typography>
-                                                </Box>
-
-                                                <Button
-                                                    fullWidth
-                                                    variant="contained"
-                                                    color="primary"
-                                                    onClick={() => setSelectedDonation(donation)}
-                                                    sx={{
-                                                        borderRadius: 3.5,
-                                                        py: 1.5,
-                                                        fontWeight: 900,
-                                                        boxShadow: '0 10px 20px rgba(255,107,107,0.2)'
-                                                    }}
-                                                >
-                                                    View Details
-                                                </Button>
-                                            </Box>
-                                        </CardContent>
-                                    </Card>
-                                </Grid>
-                            ))
-                        ) : (
-                            <Grid item xs={12}>
-                                <Paper sx={{ py: 15, textAlign: 'center', borderRadius: 10, bgcolor: 'transparent', border: '2px dashed #cbd5e1' }}>
-                                    <FilterListIcon sx={{ fontSize: 60, color: '#94a3b8', mb: 2 }} />
-                                    <Typography variant="h4" sx={{ fontWeight: 900, color: '#64748b' }}>No donations found</Typography>
-                                    <Typography variant="body1" color="text.secondary">Try adjusting your filters or checking back later.</Typography>
-                                </Paper>
-                            </Grid>
-                        )}
-                    </Grid>
-                )}
-
-                {user?.role === 'donor' && (
-                    <Fab
-                        color="primary"
-                        aria-label="add"
-                        onClick={() => setShowForm(!showForm)}
-                        sx={{
-                            position: 'fixed',
-                            bottom: 40,
-                            right: 40,
-                            width: 76,
-                            height: 76,
-                            boxShadow: '0 20px 40px rgba(255,107,107,0.4)',
-                            '&:hover': { transform: 'scale(1.1)' },
-                            transition: '0.3s'
-                        }}
-                    >
-                        {showForm ? <Typography variant="h4" fontWeight={900}>×</Typography> : <AddIcon sx={{ fontSize: 32 }} />}
-                    </Fab>
-                )}
-
-                {selectedDonation && (
-                    <DonationDetails
-                        donation={selectedDonation}
-                        onClose={() => setSelectedDonation(null)}
-                        onRequestSent={() => {
-                            fetchDonations();
-                            setSelectedDonation(null);
-                        }}
-                    />
-                )}
-            </Container>
-        </Box>
+        </div>
     );
 };
 

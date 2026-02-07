@@ -1,0 +1,7 @@
+{
+    "python.defaultInterpreterPath": "c:\\Users\\abhay\\OneDrive\\Desktop\\techmentorx-team-abhiyanta\\backend\\venv\\Scripts\\python.exe",
+    "python.analysis.extraPaths": [
+        "c:\\Users\\abhay\\OneDrive\\Desktop\\techmentorx-team-abhiyanta\\backend\\venv\\Lib\\site-packages"
+    ],
+    "python.analysis.typeCheckingMode": "off"
+}
