@@ -19,9 +19,11 @@ def create_app():
     # Register Blueprints
     from app.routes.auth import auth_bp
     from app.routes.donations import donations_bp
+    from app.routes.volunteers import volunteers_bp
     
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(donations_bp, url_prefix='/api/donations')
+    app.register_blueprint(volunteers_bp, url_prefix='/api/volunteers')
     
     @app.route('/health')
     def health_check():

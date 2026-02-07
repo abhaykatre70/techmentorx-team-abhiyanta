@@ -36,7 +36,9 @@ class Donation(Document):
             "description": self.description,
             "category": self.category,
             "quantity": self.quantity,
+            "unit": self.unit,
             "status": self.status,
+            "priority": self.priority,
             "location": self.location,
             "address": self.address,
             "createdAt": self.createdAt.isoformat()

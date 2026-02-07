@@ -170,6 +170,26 @@
   transition: all 0.3s ease;
 }
 
+.no-underline {
+  text-decoration: none;
+}
+
+.text-error {
+  color: var(--error);
+}
+
+.border-error {
+  border: 1px solid var(--error);
+}
+
+.bg-error {
+  background-color: var(--error);
+}
+
+.hover\:bg-error:hover {
+  background-color: var(--error);
+}
+
 .transition-colors {
   transition: color 0.3s ease;
 }
