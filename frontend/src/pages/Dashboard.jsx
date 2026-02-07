@@ -1,198 +1,223 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../supabase';
-import MapComponent from '../components/MapComponent';
+import { MapPin, Camera, AlertTriangle, Package, Users, Activity } from 'lucide-react';
 import GeoCamera from '../components/GeoCamera';
-import { LayoutDashboard, ListChecks, Map as MapIcon, Plus, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const Dashboard = () => {
     const { currentUser, userRole, logout } = useAuth();
     const [stats, setStats] = useState({ activeTasks: 0, pendingReports: 0, points: 0 });
-    const [view, setView] = useState('overview'); // overview, map, report
-    const [tasks, setTasks] = useState([]);
-    const [loadingTasks, setLoadingTasks] = useState(true);
+    const [view, setView] = useState('overview');
+    const [items, setItems] = useState([]); // Can be tasks or reports
+    const [loading, setLoading] = useState(true);
+    const [userLocation, setUserLocation] = useState(null);
 
-    // Dummy data fetch simulation
+    // Get Location once
     useEffect(() => {
-        // In a real app, fetch from 'tasks' and 'reports' tables
-        setStats({
-            activeTasks: 5,
-            pendingReports: 2,
-            points: 150
-        });
+        if ("geolocation" in navigator) {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => setUserLocation({ lat: pos.coords.latitude, long: pos.coords.longitude }),
+                (err) => console.warn("GPS Access Denied") // Don't block app, just show unsorted
+            );
+        }
     }, []);
 
+    // Fetch Role-Specific Data
+    useEffect(() => {
+        const fetchData = async () => {
+            setLoading(true);
+            try {
+                let data = [];
+                let tableName = '';
+
+                if (userRole === 'Donor') {
+                    // Donors see needy reports to help
+                    tableName = 'reports';
+                    const { data: reports } = await supabase.from('reports').select('*').eq('status', 'open');
+                    data = reports || [];
+                } else if (userRole === 'Volunteer') {
+                    // Volunteers see tasks to do
+                    tableName = 'tasks';
+                    const { data: tasks } = await supabase.from('tasks').select('*').eq('status', 'pending');
+                    data = tasks || [];
+                } else {
+                    // NGO sees everything (showing reports for now in list)
+                    tableName = 'reports';
+                    const { data: allReports } = await supabase.from('reports').select('*');
+                    data = allReports || [];
+                }
+
+                // Calculate Distance if location available
+                const processed = data.map(item => {
+                    let dist = null;
+                    if (userLocation && item.latitude && item.longitude) {
+                        dist = calculateDistance(userLocation.lat, userLocation.long, item.latitude, item.longitude);
+                    }
+                    return { ...item, distance: dist };
+                });
+
+                // Sort by distance
+                if (userLocation) {
+                    processed.sort((a, b) => (a.distance || 9999) - (b.distance || 9999));
+                }
+
+                setItems(processed);
+
+                // Dummy Stats for Demo
+                setStats({
+                    activeTasks: processed.length,
+                    pendingReports: 5,
+                    points: currentUser?.user_metadata?.points || 0
+                });
+
+            } catch (error) {
+                console.error("Fetch error:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchData();
+    }, [userRole, userLocation]);
+
+    const calculateDistance = (lat1, lon1, lat2, lon2) => {
+        const R = 6371; // km
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lat2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return (R * c).toFixed(1);
+    };
+
     return (
-        <div className="min-h-screen bg-off-white pt-24 px-4 pb-12">
-            <div className="max-w-7xl mx-auto">
-                <header className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <div>
-                        <h1 className="text-3xl font-bold text-gray-900">
-                            Welcome back, <span className="text-green-600">{currentUser?.user_metadata?.name || currentUser?.email}</span>
-                        </h1>
-                        <p className="text-gray-600 mt-1 capitalize">Role: <span className="font-semibold bg-green-100 text-green-800 px-2 py-0.5 rounded-full text-sm">{userRole || 'Volunteer'}</span></p>
+        <div className="min-h-screen bg-gray-50 flex flex-col font-poppins">
+            {/* Header */}
+            <header className="bg-white shadow-sm p-4 sticky top-0 z-10">
+                <div className="max-w-7xl mx-auto flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center text-green-600 font-bold">
+                            {currentUser?.email?.[0]?.toUpperCase() || 'U'}
+                        </div>
+                        <div>
+                            <h1 className="font-bold text-gray-800 text-sm md:text-base">Hello, {currentUser?.user_metadata?.name || 'User'}</h1>
+                            <span className="text-xs text-green-600 font-medium bg-green-50 px-2 py-0.5 rounded-full border border-green-100">
+                                {userRole || 'Guest'}
+                            </span>
+                        </div>
                     </div>
-
-                    <button
-                        onClick={() => setView('report')}
-                        className="bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-full font-bold shadow-lg flex items-center gap-2 transition hover:-translate-y-1"
-                    >
-                        <AlertCircle className="w-5 h-5" /> Report Needy
+                    <button onClick={logout} className="text-sm font-medium text-gray-500 hover:text-red-500 transition">
+                        Sign Out
                     </button>
-                </header>
+                </div>
+            </header>
 
-                {/* Stats Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                        <div className="flex items-center gap-4">
-                            <div className="p-3 bg-blue-100 rounded-xl text-blue-600">
-                                <ListChecks className="w-6 h-6" />
-                            </div>
-                            <div>
-                                <p className="text-sm text-gray-500 font-medium">Active Tasks</p>
-                                <p className="text-2xl font-bold text-gray-900">{stats.activeTasks}</p>
-                            </div>
-                        </div>
-                    </div>
+            {/* Main Content */}
+            <main className="flex-1 p-4 max-w-7xl mx-auto w-full space-y-6">
 
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                        <div className="flex items-center gap-4">
-                            <div className="p-3 bg-amber-100 rounded-xl text-amber-600">
-                                <AlertCircle className="w-6 h-6" />
-                            </div>
-                            <div>
-                                <p className="text-sm text-gray-500 font-medium">Pending Reports</p>
-                                <p className="text-2xl font-bold text-gray-900">{stats.pendingReports}</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                        <div className="flex items-center gap-4">
-                            <div className="p-3 bg-green-100 rounded-xl text-green-600">
-                                <MapIcon className="w-6 h-6" />
-                            </div>
-                            <div>
-                                <p className="text-sm text-gray-500 font-medium">Impact Points</p>
-                                <p className="text-2xl font-bold text-gray-900">{stats.points}</p>
-                            </div>
-                        </div>
-                    </div>
+                {/* 1. Quick Stats Row */}
+                <div className="grid grid-cols-3 gap-3 md:gap-6">
+                    <StatCard icon={<Activity className="text-blue-500" />} label="Active" value={stats.activeTasks} />
+                    <StatCard icon={<AlertTriangle className="text-amber-500" />} label="Pending" value={stats.pendingReports} />
+                    <StatCard icon={<Users className="text-green-500" />} label="Points" value={stats.points} />
                 </div>
 
-                {/* Main Content Area */}
-                <div className="grid md:grid-cols-3 gap-8">
-                    {/* Left Column: Actions / Map */}
-                    <div className="md:col-span-2 space-y-8">
-                        {view === 'overview' && (
-                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                                <div className="flex justify-between items-center mb-6">
-                                    <h2 className="text-xl font-bold text-gray-800">Nearby Activity Map</h2>
-                                    <span className="text-sm text-gray-500">Live Updates</span>
-                                </div>
-                                {/* Map Component */}
-                                <div className="h-96 rounded-xl overflow-hidden bg-gray-100 relative">
-                                    <MapComponent />
-                                    {/* Overlay Hint */}
-                                    <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur px-4 py-2 rounded-lg text-xs font-semibold shadow-sm">
-                                        📍 Showing 5 nearby NGOs and 3 active tasks
-                                    </div>
-                                </div>
-                            </div>
-                        )}
+                {/* 2. Action Buttons */}
+                <div className="flex gap-4">
+                    {userRole !== 'Volunteer' && (
+                        <button
+                            onClick={() => setView('report')}
+                            className={`flex-1 py-3 rounded-xl font-semibold shadow-sm transition flex items-center justify-center gap-2
+                            ${view === 'report' ? 'bg-red-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+                        >
+                            <Camera className="w-5 h-5" /> Report Needy
+                        </button>
+                    )}
+                    <button
+                        onClick={() => setView('overview')}
+                        className={`flex-1 py-3 rounded-xl font-semibold shadow-sm transition flex items-center justify-center gap-2
+                        ${view === 'overview' ? 'bg-green-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+                    >
+                        <MapPin className="w-5 h-5" />
+                        {userRole === 'Donor' ? 'Donate Nearby' : 'View Tasks'}
+                    </button>
+                </div>
 
-                        {view === 'report' && (
-                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                                <div className="flex justify-between items-center mb-6">
-                                    <h2 className="text-xl font-bold text-gray-800">Submit Geo-Tagged Report</h2>
-                                    <button onClick={() => setView('overview')} className="text-gray-400 hover:text-gray-600">Cancel</button>
-                                </div>
-                                <div className="max-w-md mx-auto">
-                                    <GeoCamera onCaptureConfig={() => setView('overview')} />
-                                    <p className="text-center text-sm text-gray-500 mt-4">
-                                        Photos are automatically tagged with your precise GPS coordinates for verification.
-                                    </p>
-                                </div>
+                {/* 3. Dynamic Content Area */}
+                {view === 'report' ? (
+                    <div className="animate-fade-in-up">
+                        <GeoCamera onCaptureConfig={() => setView('overview')} />
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        <h2 className="font-bold text-gray-800 text-lg flex items-center gap-2">
+                            {userRole === 'Donor' ? 'People Needing Help Nearby' :
+                                userRole === 'Volunteer' ? 'Tasks Assigned to You' : 'Recent Activity'}
+                        </h2>
+
+                        {loading ? (
+                            <div className="text-center py-10 text-gray-400">Loading nearby data...</div>
+                        ) : items.length === 0 ? (
+                            <div className="text-center py-10 bg-white rounded-xl border border-dashed border-gray-300">
+                                <p className="text-gray-500">No active items found nearby.</p>
+                            </div>
+                        ) : (
+                            <div className="grid md:grid-cols-2 gap-4">
+                                {items.map((item) => (
+                                    <Card key={item.id} item={item} role={userRole} />
+                                ))}
                             </div>
                         )}
                     </div>
-
-                    {/* Right Column: Recent Activity / Tasks */}
-                    <div className="space-y-6">
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                            {userRole === 'NGO' ? (
-                                <div className="space-y-4">
-                                    <h3 className="font-bold text-gray-800">Incoming Reports</h3>
-                                    {stats.pendingReports === 0 ? (
-                                        <p className="text-gray-500 text-sm">No new reports.</p>
-                                    ) : (
-                                        <div className="bg-red-50 text-red-700 p-4 rounded-xl border border-red-100 flex items-center justify-between">
-                                            <span><strong>{stats.pendingReports}</strong> Needy Reports Pending Review</span>
-                                            <button className="text-sm bg-white border border-red-200 px-3 py-1 rounded-lg">Review</button>
-                                        </div>
-                                    )}
-                                    <button className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold shadow-md hover:bg-blue-700 transition">
-                                        <Plus className="w-5 h-5 inline mr-2" /> Create New Task
-                                    </button>
-                                </div>
-                            ) : (
-                                <>
-                                    <h3 className="font-bold text-gray-800 mb-4">
-                                        {userRole === 'Volunteer' ? 'Available Missions' : 'Urgent Tasks Nearby'}
-                                    </h3>
-
-                                    {loadingTasks ? (
-                                        <div className="animate-pulse space-y-3">
-                                            <div className="h-16 bg-gray-100 rounded-xl"></div>
-                                            <div className="h-16 bg-gray-100 rounded-xl"></div>
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-4">
-                                            {tasks.map((task, i) => (
-                                                <div key={task.id || i} className="flex items-start gap-3 p-3 rounded-xl hover:bg-gray-50 transition border border-transparent hover:border-gray-100 cursor-pointer group">
-                                                    <div className={`w-2 h-2 mt-2 rounded-full ${task.urgent ? 'bg-red-500' : 'bg-green-500'}`}></div>
-                                                    <div className="flex-1">
-                                                        <h4 className="font-semibold text-gray-800 text-sm group-hover:text-green-700 transition">{task.title}</h4>
-                                                        <p className="text-xs text-gray-500">
-                                                            {task.description ? task.description + " • " : ""}
-                                                            <span className="font-medium text-green-600">{task.distance ? `${task.distance} km away` : "Nearby"}</span>
-                                                        </p>
-                                                    </div>
-                                                    {userRole === 'Volunteer' && (
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); toast.success("Task Accepted! +10 Points"); }}
-                                                            className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full hover:bg-green-600 hover:text-white transition"
-                                                        >
-                                                            Accept
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    <button className="w-full mt-4 text-green-600 text-sm font-bold hover:underline">
-                                        {userRole === 'Volunteer' ? 'View All Missions' : 'View All Tasks'}
-                                    </button>
-                                </>
-                            )}
-                        </div>
-
-                        <div className="bg-gradient-to-br from-green-600 to-emerald-800 p-6 rounded-2xl shadow-lg text-white">
-                            <h3 className="font-bold text-lg mb-2">Volunteer Leaderboard</h3>
-                            <p className="text-green-100 text-sm mb-4">You are in the top 15% this week!</p>
-                            <div className="flex items-center justify-between bg-white/10 p-3 rounded-lg backdrop-blur-sm">
-                                <span>Your Rank</span>
-                                <span className="font-bold text-xl">#42</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+                )}
+            </main>
         </div>
     );
 };
+
+// Sub-components for cleaner code
+const StatCard = ({ icon, label, value }) => (
+    <div className="bg-white p-3 md:p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center text-center">
+        <div className="mb-2 bg-gray-50 p-2 rounded-full">{icon}</div>
+        <span className="text-2xl font-bold text-gray-800">{value}</span>
+        <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">{label}</span>
+    </div>
+);
+
+const Card = ({ item, role }) => (
+    <div className="bg-white p-4 rounded-xl shadow-md border border-gray-100 flex gap-4 hover:shadow-lg transition">
+        {item.image_url ? (
+            <img src={item.image_url} alt="Report" className="w-24 h-24 rounded-lg object-cover bg-gray-200" />
+        ) : (
+            <div className="w-24 h-24 rounded-lg bg-green-100 flex items-center justify-center text-green-600">
+                <Package className="w-8 h-8" />
+            </div>
+        )}
+        <div className="flex-1 min-w-0">
+            <div className="flex justify-between items-start">
+                <h3 className="font-bold text-gray-800 truncate">{item.title || "Needy Report"}</h3>
+                {item.distance && (
+                    <span className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-full whitespace-nowrap">
+                        {item.distance} km away
+                    </span>
+                )}
+            </div>
+            <p className="text-sm text-gray-500 mt-1 line-clamp-2">{item.description}</p>
+
+            <div className="mt-3 flex items-center justify-between">
+                <span className={`text-xs px-2 py-1 rounded-full uppercase font-bold 
+                    ${item.urgency === 'high' ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600'}`}>
+                    {item.urgency || item.status}
+                </span>
+
+                <button className="text-sm font-semibold text-green-600 hover:text-green-700">
+                    {role === 'Donor' ? 'Donate Now' : 'Accept Task'} &rarr;
+                </button>
+            </div>
+        </div>
+    </div>
+);
 
 export default Dashboard;
