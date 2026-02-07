@@ -23,24 +23,31 @@ const Login = () => {
 
     const handleAuth = async (e) => {
         e.preventDefault();
+        console.log("Submit clicked", isLogin ? "Login" : "Register");
 
         try {
             if (isLogin) {
-                const { user } = await login(formData.email, formData.password);
-                if (user) {
-                    // Redirect based on role will handle in AuthContext listener or we force it here
-                    // Ideally, we fetch role then redirect. 
-                    // For now, let's redirect to dashboard, and AuthProvider will set role state.
+                const response = await login(formData.email, formData.password);
+                console.log("Login response:", response);
+
+                // Flexible check for user object
+                if (response?.user || response?.data?.user) {
+                    toast.success("Redirecting...");
                     navigate('/dashboard');
+                } else {
+                    // Only throw if we didn't get a user AND didn't get an explicit error handled by context
+                    // But typically context throws if failed.
+                    console.warn("Login successful but no user object returned immediately?");
+                    navigate('/dashboard'); // Fallback redirect
                 }
             } else {
                 // Pass the selected name and role to signup
                 await signup(formData.email, formData.password, formData.name, formData.role);
-                toast.success("Account created successfully!");
+                // toast.success("Account created successfully!"); // Handled in signup
                 setIsLogin(true); // Switch to login view after signup
             }
         } catch (error) {
-            console.error(error);
+            console.error("Auth Error:", error);
             toast.error(error.message || "Authentication failed");
         }
     };

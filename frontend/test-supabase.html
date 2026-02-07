@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supabase Connection Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #333;
+            margin-top: 0;
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        button {
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px 10px 0;
+        }
+
+        button:hover {
+            background: #059669;
+        }
+
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+
+        .count {
+            font-size: 24px;
+            font-weight: bold;
+            color: #10b981;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="card">
+        <h1>🔌 Supabase Connection Test</h1>
+        <div id="status"></div>
+
+        <button onclick="testConnection()">Test Connection</button>
+        <button onclick="testTables()">Check All Tables</button>
+        <button onclick="window.location.href='/'">Go to App</button>
+
+        <div id="results"></div>
+    </div>
+
+    <script type="module">
+        import { supabase } from './src/supabase.js';
+        window.supabase = supabase;
+
+        window.testConnection = async () => {
+            const statusDiv = document.getElementById('status');
+            const resultsDiv = document.getElementById('results');
+
+            statusDiv.innerHTML = '<div class="info">⏳ Testing connection...</div>';
+            resultsDiv.innerHTML = '';
+
+            try {
+                // Test basic connection
+                const { data, error } = await supabase.from('users').select('count');
+
+                if (error) throw error;
+
+                statusDiv.innerHTML = '<div class="success">✅ Supabase Connected Successfully!</div>';
+                resultsDiv.innerHTML = `<p>Connection to Supabase is working properly.</p>`;
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="error">❌ Connection Failed: ${error.message}</div>`;
+                resultsDiv.innerHTML = `
+                    <h3>Troubleshooting Steps:</h3>
+                    <ol>
+                        <li>Check if <code>frontend/src/supabase.js</code> has correct URL and Key</li>
+                        <li>Verify your Supabase project is active</li>
+                        <li>Run <code>SUPABASE_FINAL_RESET.sql</code> in Supabase SQL Editor</li>
+                        <li>Check browser console for detailed errors</li>
+                    </ol>
+                `;
+                console.error('Connection error:', error);
+            }
+        };
+
+        window.testTables = async () => {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="info">⏳ Checking tables...</div>';
+
+            const tables = ['users', 'tasks', 'donations', 'reports', 'messages'];
+            let html = '<h3>📊 Table Data Count:</h3>';
+
+            for (const table of tables) {
+                try {
+                    const { data, error, count } = await supabase
+                        .from(table)
+                        .select('*', { count: 'exact', head: true });
+
+                    if (error) {
+                        html += `<div class="error">❌ ${table}: Error - ${error.message}</div>`;
+                    } else {
+                        const actualCount = count || 0;
+                        const status = actualCount > 0 ? 'success' : 'error';
+                        html += `<div class="${status}">${table}: <span class="count">${actualCount}</span> records</div>`;
+                    }
+                } catch (err) {
+                    html += `<div class="error">❌ ${table}: ${err.message}</div>`;
+                }
+            }
+
+            html += `
+                <div class="info" style="margin-top: 20px;">
+                    <strong>Expected counts (after running SQL script):</strong><br>
+                    users: 5 | tasks: 5 | donations: 4 | reports: 3 | messages: 2
+                </div>
+            `;
+
+            resultsDiv.innerHTML = html;
+        };
+
+        // Auto-test on load
+        window.testConnection();
+    </script>
+</body>
+
+</html>

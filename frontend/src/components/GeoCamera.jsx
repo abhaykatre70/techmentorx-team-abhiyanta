@@ -1,10 +1,11 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Camera, MapPin, X, Upload } from 'lucide-react';
 import { supabase } from '../supabase';
 import { toast } from 'react-hot-toast';
+import { useAuth } from '../context/AuthContext';
 
 const GeoCamera = ({ onCaptureConfig }) => {
+    const { updatePoints } = useAuth(); // Gamification Hook
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
     const [stream, setStream] = useState(null);
@@ -38,19 +39,24 @@ const GeoCamera = ({ onCaptureConfig }) => {
         setLoading(true);
         try {
             const mediaStream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: 'environment' } // Prefer back camera
+                video: { facingMode: 'environment' }
             });
             setStream(mediaStream);
-            if (videoRef.current) {
-                videoRef.current.srcObject = mediaStream;
-            }
         } catch (err) {
             console.error("Camera error:", err);
-            toast.error("Could not access camera.");
+            toast.error("Could not access camera. Check permissions.");
         } finally {
             setLoading(false);
         }
     };
+
+    // Effect: Attach Stream
+    useEffect(() => {
+        if (stream && videoRef.current) {
+            videoRef.current.srcObject = stream;
+            videoRef.current.play().catch(e => console.error("Play error:", e));
+        }
+    }, [stream]);
 
     // 3. Stop Camera
     const stopCamera = () => {
@@ -62,28 +68,29 @@ const GeoCamera = ({ onCaptureConfig }) => {
 
     // 4. Capture Photo
     const capturePhoto = () => {
-        if (videoRef.current && canvasRef.current) {
-            // Ensure video is playing and has dimension
-            if (videoRef.current.readyState < 2) {
-                toast.error("Camera loading... please wait.");
-                return;
-            }
+        if (!videoRef.current) return;
 
-            const context = canvasRef.current.getContext('2d');
-            canvasRef.current.width = videoRef.current.videoWidth;
-            canvasRef.current.height = videoRef.current.videoHeight;
+        const canvas = canvasRef.current || document.createElement('canvas');
+        try {
+            canvas.width = videoRef.current.videoWidth;
+            canvas.height = videoRef.current.videoHeight;
+            const context = canvas.getContext('2d');
             context.drawImage(videoRef.current, 0, 0);
 
-            const imageData = canvasRef.current.toDataURL('image/jpeg');
+            const imageData = canvas.toDataURL('image/jpeg');
             setCapturedImage(imageData);
+
             stopCamera();
+        } catch (e) {
+            console.error("Capture failed:", e);
+            toast.error("Failed to capture image");
         }
     };
 
-    // 5. Upload to Supabase Storage (Bucket: 'reports')
+    // 5. Upload to Supabase
     const handleUpload = async () => {
-        if (!capturedImage || !location) {
-            toast.error("Missing photo or location data.");
+        if (!capturedImage) {
+            toast.error("No image captured");
             return;
         }
 
@@ -94,35 +101,34 @@ const GeoCamera = ({ onCaptureConfig }) => {
             const blob = await res.blob();
             const fileName = `report_${Date.now()}.jpg`;
 
-            let publicUrl = "https://images.unsplash.com/photo-1532629345422-7515f3d16bb6?auto=format&fit=crop&w=800&q=80"; // Default placeholder if upload fails
+            // Default placeholder if storage fails
+            let publicUrl = "https://placehold.co/600x400/png?text=Report+Image";
 
             try {
                 // Upload Image
-                const { data: uploadData, error: uploadError } = await supabase.storage
+                const { error: uploadError } = await supabase.storage
                     .from('reports')
                     .upload(fileName, blob);
 
-                if (uploadError) {
-                    console.warn("Storage upload failed (Bucket might be missing). Using placeholder.", uploadError);
-                    toast("Image upload skipped (Storage not configured), but report will be saved.");
-                } else {
-                    // Get Public URL
+                if (!uploadError) {
                     const { data } = supabase.storage
                         .from('reports')
                         .getPublicUrl(fileName);
                     publicUrl = data.publicUrl;
+                } else {
+                    console.warn("Storage upload failed, using placeholder.");
                 }
             } catch (storageErr) {
                 console.warn("Storage exception:", storageErr);
             }
 
-            // Create Report Record in DB
+            // Create Report Record
             const { error: dbError } = await supabase
                 .from('reports')
                 .insert([{
                     image_url: publicUrl,
-                    latitude: location.lat,
-                    longitude: location.long,
+                    latitude: location?.lat || 0,
+                    longitude: location?.long || 0,
                     description: "Needy report via GeoCamera",
                     status: 'open',
                     urgency: 'high'
@@ -130,18 +136,22 @@ const GeoCamera = ({ onCaptureConfig }) => {
 
             if (dbError) throw dbError;
 
-            toast.success("Geo-tagged Report Submitted Successfully!");
-            setCapturedImage(null); // Reset
-            if (onCaptureConfig) onCaptureConfig(); // Callback to parent
+            // GAMIFICATION REWARD
+            await updatePoints(50);
+            toast.success("Report Submitted! (+50 Points)");
+
+            setCapturedImage(null);
+            if (onCaptureConfig) onCaptureConfig();
+
         } catch (error) {
             console.error(error);
-            toast.error("Failed to upload report. Check permissions.");
+            toast.error("Failed to save report.");
         } finally {
             setUploading(false);
         }
     };
 
-    // Clean up on unmount
+    // Clean up
     useEffect(() => {
         return () => stopCamera();
     }, []);
@@ -216,7 +226,7 @@ const GeoCamera = ({ onCaptureConfig }) => {
                         disabled={uploading}
                         className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-bold flex items-center justify-center gap-2 transition disabled:opacity-50"
                     >
-                        {uploading ? "Uploading..." : <><Upload className="w-4 h-4" /> Submit Report</>}
+                        {uploading ? "Uploading..." : <><Upload className="w-4 h-4" /> Submit (+50 pts)</>}
                     </button>
                 </div>
             )}

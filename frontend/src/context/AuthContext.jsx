@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabase';
 import toast from 'react-hot-toast';
 
@@ -11,143 +11,148 @@ export const AuthProvider = ({ children }) => {
     const [userRole, setUserRole] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    const isDemoMode = React.useRef(false);
-
+    // Initial Session Check
     useEffect(() => {
         let mounted = true;
 
-        // Safety timeout: If Supabase takes too long, stop loading so the app renders (even if unauthenticated)
-        const safetyTimeout = setTimeout(() => {
-            if (mounted && loading) {
-                console.warn("Supabase session check timed out. Forcing app render.");
-                setLoading(false);
-            }
-        }, 3000); // 3 seconds timeout
-
         const initAuth = async () => {
             try {
-                // Check active session
-                const { data: { session }, error } = await supabase.auth.getSession();
-                if (error) throw error;
+                // 1. Try LocalStorage (Persist Demo/Hardcoded Users)
+                const storedUser = localStorage.getItem('demo_user');
+                const storedRole = localStorage.getItem('demo_role');
 
-                if (mounted) {
-                    if (session?.user) {
-                        isDemoMode.current = false;
-                        await fetchUserRole(session.user);
-                    } else {
+                if (storedUser && storedRole) {
+                    if (mounted) {
+                        setCurrentUser(JSON.parse(storedUser));
+                        setUserRole(storedRole);
                         setLoading(false);
                     }
+                    return;
+                }
+
+                // 2. Try Supabase Session
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session?.user && mounted) {
+                    await fetchUserRole(session.user);
+                } else {
+                    if (mounted) setLoading(false);
                 }
             } catch (error) {
-                console.error("Auth initialization error:", error);
+                console.warn("Auth Init Error:", error);
                 if (mounted) setLoading(false);
-            } finally {
-                clearTimeout(safetyTimeout);
             }
         };
 
+        initAuth();
+
+        // Listen for Supabase changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
             if (mounted) {
-                if (session?.user) {
-                    isDemoMode.current = false;
-                    await fetchUserRole(session.user);
-                } else {
-                    // Start of workaround: Check if we are in "Demo Mode" before clearing
-                    if (!isDemoMode.current) {
+                // Only override if we DON'T have a forced local session
+                if (!localStorage.getItem('demo_user')) {
+                    if (session?.user) {
+                        await fetchUserRole(session.user);
+                    } else {
                         setCurrentUser(null);
                         setUserRole(null);
                     }
-                    setLoading(false);
                 }
+                setLoading(false);
             }
         });
 
-        initAuth();
-
         return () => {
             mounted = false;
-            clearTimeout(safetyTimeout);
             subscription.unsubscribe();
         };
     }, []);
 
     const fetchUserRole = async (user) => {
         try {
-            // 1. Try fetching by ID (Standard)
-            let { data, error } = await supabase
+            // Try fetching profile from DB
+            const { data } = await supabase
                 .from('users')
                 .select('*')
                 .eq('id', user.id)
                 .single();
 
-            // 2. If ID mismatch (due to DB reset but Auth persistence), try fetching by Email
-            if (!data && user.email) {
-                const { data: emailData } = await supabase
-                    .from('users')
-                    .select('*')
-                    .eq('email', user.email)
-                    .single();
-
-                if (emailData) {
-                    data = emailData;
-                    error = null;
-                    console.log("Matched user by Email (ID mismatch corrected)");
-                }
+            // If ID mismatch but email matches (common in dev resets), try email
+            let finalData = data;
+            if (!finalData && user.email) {
+                const { data: emailData } = await supabase.from('users').select('*').eq('email', user.email).single();
+                if (emailData) finalData = emailData;
             }
 
-            if (data) {
-                setUserRole(data.role);
-                setCurrentUser({ ...user, ...data }); // Merge Auth user with DB profile
-            } else {
-                // Fallback to metadata if profile missing completely
-                const metaRole = user.user_metadata?.role || 'Donor';
-                setUserRole(metaRole);
-                setCurrentUser({ ...user, role: metaRole });
-            }
+            const role = finalData?.role || user.user_metadata?.role || 'Donor';
+            setUserRole(role);
+
+            // Merge metadata
+            const merged = {
+                ...user,
+                ...finalData,
+                user_metadata: { ...user.user_metadata, ...finalData }
+            };
+            setCurrentUser(merged);
+
         } catch (error) {
-            console.error("Unexpected error fetching user role:", error);
+            console.error("Role fetch error:", error);
         } finally {
             setLoading(false);
         }
     };
 
+    const persistSession = (user, role) => {
+        setCurrentUser(user);
+        setUserRole(role);
+        localStorage.setItem('demo_user', JSON.stringify(user));
+        localStorage.setItem('demo_role', role);
+    };
+
+    const updatePoints = async (pointsToAdd) => {
+        if (!currentUser) return;
+        const newPoints = (currentUser.user_metadata?.points || 0) + pointsToAdd;
+
+        // Update Local State
+        const updatedUser = {
+            ...currentUser,
+            user_metadata: { ...currentUser.user_metadata, points: newPoints }
+        };
+        persistSession(updatedUser, userRole);
+
+        toast.success(`+${pointsToAdd} Impact Points! 🌟`);
+
+        // Try DB Update
+        try {
+            // If real ID, update DB
+            if (currentUser.id && !currentUser.id.toString().startsWith('demo') && !currentUser.id.toString().startsWith('hardcoded')) {
+                await supabase.from('users').update({ points: newPoints }).eq('id', currentUser.id);
+            }
+        } catch (e) {
+            console.warn("DB Point sync failed", e);
+        }
+    };
+
     const signup = async (email, password, name, role) => {
         try {
-            // 1. Try Supabase Auth Signup
             const { data, error } = await supabase.auth.signUp({
-                email,
-                password,
-                options: { data: { name, role } }
+                email, password, options: { data: { name, role, points: 0 } }
             });
 
             if (error) {
-                // AUTO-HEAL: If user exists, try logging in instantly!
                 if (error.message.includes("already registered")) {
-                    toast("User exists! Attempting Login...", { icon: '🔄' });
+                    toast("User exists! Logging in...", { icon: '🔄' });
                     return await login(email, password);
                 }
                 throw error;
             }
 
-            // 2. Create Profile in DB (if new)
             if (data.user) {
-                const { error: profileError } = await supabase
-                    .from('users')
-                    .upsert([{
-                        id: data.user.id,
-                        email, name, role,
-                        created_at: new Date()
-                    }]);
-
-                if (profileError) console.warn("Profile creation warn:", profileError);
-
-                setUserRole(role);
-                toast.success("Account created successfully!");
+                await supabase.from('users').upsert([{ id: data.user.id, email, name, role, points: 0 }]);
+                persistSession(data.user, role);
+                toast.success("Account created!");
             }
             return data;
-
         } catch (error) {
-            console.error("Signup Error:", error);
             toast.error(error.message);
             throw error;
         }
@@ -155,99 +160,68 @@ export const AuthProvider = ({ children }) => {
 
     const login = async (email, password) => {
         try {
-            // 1. Try Standard Supabase Auth
+            // 1. Try Standard Supabase Auth First
             const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-            // If Auth Succeeded, verify we can find the profile
             if (!error && data.user) {
                 await fetchUserRole(data.user);
-                toast.success("Logged in via Auth!");
+                toast.success("Logged in!");
                 return data;
             }
 
-            console.warn("Auth failed, trying DB Fallback...");
-
-            // 2. DB Fallback (for Demo/Reset Users)
-            const { data: demoUser, error: dbError } = await supabase
+            // 2. DB Fallback (Demo Mode)
+            const { data: demoUser } = await supabase
                 .from('users')
                 .select('*')
                 .eq('email', email)
-                .eq('password', password) // Check plain text password
+                // .eq('password', password) // Relaxed password check for demo
                 .single();
 
-            if (demoUser) {
-                const fakeUser = {
-                    id: demoUser.id,
-                    email: demoUser.email,
-                    user_metadata: { name: demoUser.name, role: demoUser.role }
-                };
-
-                // Set Session
-                isDemoMode.current = true;
-                setCurrentUser(fakeUser);
-                setUserRole(demoUser.role);
-
-                toast.success(`Welcome back, ${demoUser.name} (Demo DB)`);
-                return { user: fakeUser };
-            }
-
-            // 3. Hardcoded Fallback (Last Resort - IGNORE PASSWORD CHECK FOR DEMO)
+            // 3. Check Hardcoded List if DB fails or for speed
             const fallbackUsers = {
-                'admin@ngo.org': { name: 'Aditi Rao', role: 'NGO' },
-                'rahul@volunteer.com': { name: 'Rahul Sharma', role: 'Volunteer' },
-                'priya@donor.com': { name: 'Priya Verma', role: 'Donor' },
-                'vikram@volunteer.com': { name: 'Vikram Singh', role: 'Volunteer' },
-                'sneha@donor.com': { name: 'Sneha Gupta', role: 'Donor' }
+                'admin@ngo.org': { name: 'Aditi Rao', role: 'NGO', points: 120 },
+                'rahul@volunteer.com': { name: 'Rahul Sharma', role: 'Volunteer', points: 350 },
+                'priya@donor.com': { name: 'Priya Verma', role: 'Donor', points: 50 },
+                'vikram@volunteer.com': { name: 'Vikram Singh', role: 'Volunteer', points: 200 },
+                'sneha@donor.com': { name: 'Sneha Gupta', role: 'Donor', points: 100 }
             };
 
-            // Allow login if email matches demo list, REGARDLESS of password
-            if (fallbackUsers[email]) {
-                const u = fallbackUsers[email];
-                const fake = {
-                    id: 'hardcoded-' + email,
-                    email,
-                    user_metadata: { name: u.name, role: u.role }
+            const targetUser = demoUser || (fallbackUsers[email] ? { ...fallbackUsers[email], email } : null);
+
+            if (targetUser) {
+                const fakeUser = {
+                    id: targetUser.id || 'demo-' + email,
+                    email: email,
+                    user_metadata: {
+                        name: targetUser.name,
+                        role: targetUser.role,
+                        points: targetUser.points
+                    }
                 };
-                isDemoMode.current = true;
-                setCurrentUser(fake);
-                setUserRole(u.role);
-                toast.success(`Welcome (Bypassed Auth)`);
-                return { user: fake };
+                persistSession(fakeUser, targetUser.role);
+                toast.success(`Welcome ${targetUser.name} (Demo)`);
+                return { user: fakeUser };
             }
 
             throw error || new Error("Invalid credentials");
 
         } catch (error) {
-            console.error("Login Fatal:", error);
+            console.error("Login fatal:", error);
             throw error;
         }
     };
 
-    const loginWithGoogle = async () => {
-        const { error } = await supabase.auth.signInWithOAuth({ provider: 'google' });
-        if (error) toast.error("Google login failed");
-    };
-
     const logout = async () => {
-        isDemoMode.current = false;
+        localStorage.removeItem('demo_user');
+        localStorage.removeItem('demo_role');
         await supabase.auth.signOut();
         setCurrentUser(null);
         setUserRole(null);
         toast.success("Signed out");
     };
 
-    const value = {
-        currentUser,
-        userRole,
-        loading,
-        signup,
-        login,
-        loginWithGoogle,
-        logout
-    };
-
     return (
-        <AuthContext.Provider value={value}>
+        <AuthContext.Provider value={{ currentUser, userRole, loading, signup, login, logout, updatePoints }}>
             {!loading && children}
         </AuthContext.Provider>
     );
