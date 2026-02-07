@@ -11,6 +11,8 @@ export const AuthProvider = ({ children }) => {
     const [userRole, setUserRole] = useState(null);
     const [loading, setLoading] = useState(true);
 
+    const isDemoMode = React.useRef(false);
+
     useEffect(() => {
         let mounted = true;
 
@@ -30,6 +32,7 @@ export const AuthProvider = ({ children }) => {
 
                 if (mounted) {
                     if (session?.user) {
+                        isDemoMode.current = false;
                         await fetchUserRole(session.user);
                     } else {
                         setLoading(false);
@@ -46,10 +49,14 @@ export const AuthProvider = ({ children }) => {
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
             if (mounted) {
                 if (session?.user) {
+                    isDemoMode.current = false;
                     await fetchUserRole(session.user);
                 } else {
-                    setCurrentUser(null);
-                    setUserRole(null);
+                    // Start of workaround: Check if we are in "Demo Mode" before clearing
+                    if (!isDemoMode.current) {
+                        setCurrentUser(null);
+                        setUserRole(null);
+                    }
                     setLoading(false);
                 }
             }
@@ -66,21 +73,36 @@ export const AuthProvider = ({ children }) => {
 
     const fetchUserRole = async (user) => {
         try {
-            const { data, error } = await supabase
+            // 1. Try fetching by ID (Standard)
+            let { data, error } = await supabase
                 .from('users')
                 .select('*')
                 .eq('id', user.id)
                 .single();
 
-            if (error) {
-                console.warn("User profile not found in 'users' table. Using metadata if available.", error);
-                // Fallback to metadata if profile missing
+            // 2. If ID mismatch (due to DB reset but Auth persistence), try fetching by Email
+            if (!data && user.email) {
+                const { data: emailData } = await supabase
+                    .from('users')
+                    .select('*')
+                    .eq('email', user.email)
+                    .single();
+
+                if (emailData) {
+                    data = emailData;
+                    error = null;
+                    console.log("Matched user by Email (ID mismatch corrected)");
+                }
+            }
+
+            if (data) {
+                setUserRole(data.role);
+                setCurrentUser({ ...user, ...data }); // Merge Auth user with DB profile
+            } else {
+                // Fallback to metadata if profile missing completely
                 const metaRole = user.user_metadata?.role || 'Donor';
                 setUserRole(metaRole);
                 setCurrentUser({ ...user, role: metaRole });
-            } else if (data) {
-                setUserRole(data.role);
-                setCurrentUser({ ...user, ...data });
             }
         } catch (error) {
             console.error("Unexpected error fetching user role:", error);
@@ -140,41 +162,70 @@ export const AuthProvider = ({ children }) => {
                 password
             });
 
-            if (!error && data.user) {
+            if (error) throw error;
+
+            if (data.user) {
                 await fetchUserRole(data.user);
                 toast.success("Logged in successfully!");
                 return data;
             }
+        } catch (authError) {
+            console.warn("Standard Auth Failed:", authError.message);
 
-            // 2. Fallback: Demo Login (Check public.users table directly)
-            // SECURITY WARNING: This is for DEMO PURPOSES ONLY to allow login with dummy users.
-            console.warn("Standard auth failed, trying Demo Login...");
+            // 2. Fallback: Check Database for Demo User
+            try {
+                const { data: demoUser, error: dbError } = await supabase
+                    .from('users')
+                    .select('*')
+                    .eq('email', email)
+                    .eq('password', password)
+                    .single();
 
-            const { data: demoUser, error: demoError } = await supabase
-                .from('users')
-                .select('*')
-                .eq('email', email)
-                .eq('password', password) // Checking plain text password for demo
-                .single();
+                if (demoUser) {
+                    // Manually set session state for Demo User
+                    const fakeUser = {
+                        id: demoUser.id,
+                        email: demoUser.email,
+                        user_metadata: { name: demoUser.name, role: demoUser.role }
+                    };
 
-            if (demoUser) {
-                // Manually set session state for Demo User
+                    isDemoMode.current = true; // IMPORTANT: Prevent auto-logout
+                    setCurrentUser(fakeUser);
+                    setUserRole(demoUser.role);
+
+                    toast.success(`Welcome back, ${demoUser.name} (Demo Mode)`);
+                    return { user: fakeUser };
+                }
+            } catch (innerErr) {
+                console.log("DB Fallback failed:", innerErr.message);
+            }
+
+            // 3. FINAL FALLBACK: Hardcoded Demo Users
+            const demoUsers = {
+                'admin@ngo.org': { name: 'Aditi Rao (Admin)', role: 'NGO' },
+                'rahul@volunteer.com': { name: 'Rahul Sharma', role: 'Volunteer' },
+                'priya@donor.com': { name: 'Priya Verma', role: 'Donor' },
+                'vikram@volunteer.com': { name: 'Vikram Singh', role: 'Volunteer' },
+                'sneha@donor.com': { name: 'Sneha Gupta', role: 'Donor' }
+            };
+
+            if (password === '123456' && demoUsers[email]) {
+                console.warn("Using Hardcoded Demo User Fallback");
+                const u = demoUsers[email];
                 const fakeUser = {
-                    id: demoUser.id,
-                    email: demoUser.email,
-                    user_metadata: { name: demoUser.name, role: demoUser.role }
+                    id: 'demo-' + email,
+                    email: email,
+                    user_metadata: { name: u.name, role: u.role }
                 };
+                isDemoMode.current = true; // IMPORTANT: Prevent auto-logout
                 setCurrentUser(fakeUser);
-                setUserRole(demoUser.role);
-                toast.success(`Welcome back, ${demoUser.name} (Demo Mode)`);
+                setUserRole(u.role);
+                toast.success(`Welcome back, ${u.name} (Offline Demo)`);
                 return { user: fakeUser };
             }
 
-            throw error || new Error("Invalid credentials");
-
-        } catch (error) {
-            console.error("Login Error:", error);
-            throw error;
+            // If everything fails, re-throw the original auth error
+            throw authError;
         }
     };
 
@@ -189,7 +240,10 @@ export const AuthProvider = ({ children }) => {
     };
 
     const logout = async () => {
+        isDemoMode.current = false; // Reset demo mode
         const { error } = await supabase.auth.signOut();
+        setCurrentUser(null);
+        setUserRole(null);
         if (error) toast.error("Error signing out");
         else toast.success("Signed out");
     };
