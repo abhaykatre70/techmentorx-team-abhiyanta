@@ -5,6 +5,7 @@ import { supabase } from '../supabase';
 import MapComponent from '../components/MapComponent';
 import GeoCamera from '../components/GeoCamera';
 import { LayoutDashboard, ListChecks, Map as MapIcon, Plus, AlertCircle } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 const Dashboard = () => {
     const { currentUser, userRole, logout } = useAuth();
@@ -120,21 +121,23 @@ const Dashboard = () => {
                     <div className="space-y-6">
                         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                             <h3 className="font-bold text-gray-800 mb-4">Urgent Tasks Nearby</h3>
-                            <div className="space-y-4">
-                                {[
-                                    { title: "Food Pickup needed", location: "Sector 14, 2km away", urgent: true },
-                                    { title: "Medicines Drop", location: "Civil Lines, 3.5km away", urgent: false },
-                                    { title: "Blanket Distribution", location: "Railway Station, 5km away", urgent: true },
-                                ].map((task, i) => (
-                                    <div key={i} className="flex items-start gap-3 p-3 rounded-xl hover:bg-gray-50 transition border border-transparent hover:border-gray-100 cursor-pointer">
-                                        <div className={`w-2 h-2 mt-2 rounded-full ${task.urgent ? 'bg-red-500' : 'bg-green-500'}`}></div>
-                                        <div>
-                                            <h4 className="font-semibold text-gray-800 text-sm">{task.title}</h4>
-                                            <p className="text-xs text-gray-500">{task.location}</p>
+
+                            {loadingTasks ? (
+                                <p className="text-gray-400 text-sm">Loading tasks...</p>
+                            ) : (
+                                <div className="space-y-4">
+                                    {tasks.map((task, i) => (
+                                        <div key={task.id || i} className="flex items-start gap-3 p-3 rounded-xl hover:bg-gray-50 transition border border-transparent hover:border-gray-100 cursor-pointer">
+                                            <div className={`w-2 h-2 mt-2 rounded-full ${task.urgent ? 'bg-red-500' : 'bg-green-500'}`}></div>
+                                            <div>
+                                                <h4 className="font-semibold text-gray-800 text-sm">{task.title}</h4>
+                                                <p className="text-xs text-gray-500">{task.description || task.location || "3.2km away"}</p>
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
-                            </div>
+                                    ))}
+                                </div>
+                            )}
+
                             <button className="w-full mt-4 text-green-600 text-sm font-bold hover:underline">View All Tasks</button>
                         </div>
 

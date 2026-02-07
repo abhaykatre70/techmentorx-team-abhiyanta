@@ -88,17 +88,27 @@ const GeoCamera = ({ onCaptureConfig }) => {
             const blob = await res.blob();
             const fileName = `report_${Date.now()}.jpg`;
 
-            // Upload Image
-            const { data: uploadData, error: uploadError } = await supabase.storage
-                .from('reports') // Ensure 'reports' bucket exists in Supabase Storage!
-                .upload(fileName, blob);
+            let publicUrl = "https://images.unsplash.com/photo-1532629345422-7515f3d16bb6?auto=format&fit=crop&w=800&q=80"; // Default placeholder if upload fails
 
-            if (uploadError) throw uploadError;
+            try {
+                // Upload Image
+                const { data: uploadData, error: uploadError } = await supabase.storage
+                    .from('reports')
+                    .upload(fileName, blob);
 
-            // Get Public URL
-            const { data: { publicUrl } } = supabase.storage
-                .from('reports')
-                .getPublicUrl(fileName);
+                if (uploadError) {
+                    console.warn("Storage upload failed (Bucket might be missing). Using placeholder.", uploadError);
+                    toast("Image upload skipped (Storage not configured), but report will be saved.");
+                } else {
+                    // Get Public URL
+                    const { data } = supabase.storage
+                        .from('reports')
+                        .getPublicUrl(fileName);
+                    publicUrl = data.publicUrl;
+                }
+            } catch (storageErr) {
+                console.warn("Storage exception:", storageErr);
+            }
 
             // Create Report Record in DB
             const { error: dbError } = await supabase

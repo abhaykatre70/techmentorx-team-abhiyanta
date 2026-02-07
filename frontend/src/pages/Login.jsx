@@ -10,7 +10,8 @@ const Login = () => {
     const [formData, setFormData] = useState({
         email: '',
         password: '',
-        name: ''
+        name: '',
+        role: 'Donor'
     });
     const [showPassword, setShowPassword] = useState(false);
     const { login, signup, userRole, loginWithGoogle } = useAuth();
@@ -33,11 +34,9 @@ const Login = () => {
                     navigate('/dashboard');
                 }
             } else {
-                // Check role selection
-                const selectedRole = window.prompt("Select Role (Donor, Volunteer, NGO, Admin):", "Donor");
-                const role = selectedRole || 'Donor';
-
-                await signup(formData.email, formData.password, formData.name, role);
+                // Pass the selected name and role to signup
+                await signup(formData.email, formData.password, formData.name, formData.role);
+                toast.success("Account created successfully!");
                 setIsLogin(true); // Switch to login view after signup
             }
         } catch (error) {
@@ -67,21 +66,45 @@ const Login = () => {
                 <form onSubmit={handleAuth} className="space-y-5">
 
                     {!isLogin && (
-                        <div className="group">
-                            <label className="block text-sm font-semibold text-gray-700 mb-2 ml-1">Full Name</label>
-                            <div className="relative">
-                                <User className="absolute left-4 top-3.5 w-5 h-5 text-gray-400 group-focus-within:text-green-600 transition" />
-                                <input
-                                    type="text"
-                                    name="name"
-                                    placeholder="John Doe"
-                                    className="w-full pl-12 pr-4 py-3.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition duration-200 font-medium"
-                                    value={formData.name}
-                                    onChange={handleChange}
-                                    required={!isLogin}
-                                />
+                        <>
+                            <div className="group">
+                                <label className="block text-sm font-semibold text-gray-700 mb-2 ml-1">Full Name</label>
+                                <div className="relative">
+                                    <User className="absolute left-4 top-3.5 w-5 h-5 text-gray-400 group-focus-within:text-green-600 transition" />
+                                    <input
+                                        type="text"
+                                        name="name"
+                                        placeholder="John Doe"
+                                        className="w-full pl-12 pr-4 py-3.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition duration-200 font-medium"
+                                        value={formData.name}
+                                        onChange={handleChange}
+                                        required={!isLogin}
+                                    />
+                                </div>
                             </div>
-                        </div>
+
+                            {/* Role Selection Dropdown */}
+                            <div className="group">
+                                <label className="block text-sm font-semibold text-gray-700 mb-2 ml-1">I am a</label>
+                                <div className="relative">
+                                    <span className="absolute left-4 top-3.5 text-gray-400 text-lg group-focus-within:text-green-600 transition">🎭</span>
+                                    <select
+                                        name="role"
+                                        value={formData.role}
+                                        onChange={handleChange}
+                                        className="block w-full pl-12 pr-4 py-3.5 border border-gray-200 rounded-xl leading-5 bg-gray-50 text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition sm:text-sm appearance-none font-medium"
+                                        required={!isLogin}
+                                    >
+                                        <option value="Donor">Donor (Donate Items)</option>
+                                        <option value="Volunteer">Volunteer (Help Deliver)</option>
+                                        <option value="NGO">NGO (Request Help)</option>
+                                    </select>
+                                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                                        <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" /></svg>
+                                    </div>
+                                </div>
+                            </div>
+                        </>
                     )}
 
                     <div className="group">
