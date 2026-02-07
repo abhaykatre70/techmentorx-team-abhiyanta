@@ -12,29 +12,56 @@ export const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Check active session
-        const getSession = async () => {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session?.user) {
-                await fetchUserRole(session.user);
-            } else {
+        let mounted = true;
+
+        // Safety timeout: If Supabase takes too long, stop loading so the app renders (even if unauthenticated)
+        const safetyTimeout = setTimeout(() => {
+            if (mounted && loading) {
+                console.warn("Supabase session check timed out. Forcing app render.");
                 setLoading(false);
+            }
+        }, 3000); // 3 seconds timeout
+
+        const initAuth = async () => {
+            try {
+                // Check active session
+                const { data: { session }, error } = await supabase.auth.getSession();
+                if (error) throw error;
+
+                if (mounted) {
+                    if (session?.user) {
+                        await fetchUserRole(session.user);
+                    } else {
+                        setLoading(false);
+                    }
+                }
+            } catch (error) {
+                console.error("Auth initialization error:", error);
+                if (mounted) setLoading(false);
+            } finally {
+                clearTimeout(safetyTimeout);
             }
         };
 
-        getSession();
-
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-            if (session?.user) {
-                await fetchUserRole(session.user);
-            } else {
-                setCurrentUser(null);
-                setUserRole(null);
-                setLoading(false);
+            if (mounted) {
+                if (session?.user) {
+                    await fetchUserRole(session.user);
+                } else {
+                    setCurrentUser(null);
+                    setUserRole(null);
+                    setLoading(false);
+                }
             }
         });
 
-        return () => subscription.unsubscribe();
+        initAuth();
+
+        return () => {
+            mounted = false;
+            clearTimeout(safetyTimeout);
+            subscription.unsubscribe();
+        };
     }, []);
 
     const fetchUserRole = async (user) => {
