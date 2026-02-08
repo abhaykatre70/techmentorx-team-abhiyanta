@@ -134,12 +134,20 @@ export const AuthProvider = ({ children }) => {
 
     const signup = async (email, password, name, role) => {
         try {
+            console.log("🔵 Starting signup for:", email, "Role:", role);
+
             const { data, error } = await supabase.auth.signUp({
-                email, password, options: { data: { name, role, points: 0 } }
+                email,
+                password,
+                options: {
+                    data: { name, role, points: 0 },
+                    emailRedirectTo: window.location.origin
+                }
             });
 
             if (error) {
-                if (error.message.includes("already registered")) {
+                console.error("🔴 Signup error:", error);
+                if (error.message.includes("already registered") || error.message.includes("already been registered")) {
                     toast("User exists! Logging in...", { icon: '🔄' });
                     return await login(email, password);
                 }
@@ -147,27 +155,123 @@ export const AuthProvider = ({ children }) => {
             }
 
             if (data.user) {
-                await supabase.from('users').upsert([{ id: data.user.id, email, name, role, points: 0 }]);
-                persistSession(data.user, role);
-                toast.success("Account created!");
+                console.log("🟢 User created in Auth:", data.user.id);
+
+                // Insert into users table
+                try {
+                    const { data: insertData, error: dbError } = await supabase
+                        .from('users')
+                        .insert([{
+                            id: data.user.id,
+                            email,
+                            name,
+                            role,
+                            points: 0
+                        }])
+                        .select()
+                        .single();
+
+                    if (dbError) {
+                        console.error("🔴 Database insert error:", dbError);
+                        // If insert fails, try upsert as fallback
+                        const { error: upsertError } = await supabase
+                            .from('users')
+                            .upsert([{
+                                id: data.user.id,
+                                email,
+                                name,
+                                role,
+                                points: 0
+                            }]);
+
+                        if (upsertError) {
+                            console.error("🔴 Upsert also failed:", upsertError);
+                        } else {
+                            console.log("🟢 User added to database via upsert");
+                        }
+                    } else {
+                        console.log("🟢 User added to database:", insertData);
+                    }
+                } catch (dbErr) {
+                    console.error("🔴 Database operation failed:", dbErr);
+                }
+
+                // Create user object with metadata
+                const userWithMetadata = {
+                    ...data.user,
+                    user_metadata: {
+                        name,
+                        role,
+                        points: 0
+                    }
+                };
+
+                persistSession(userWithMetadata, role);
+                toast.success("Account created! Welcome aboard! 🎉");
+
+                // Navigate to dashboard after signup
+                setTimeout(() => {
+                    window.location.href = '/dashboard';
+                }, 1000);
             }
             return data;
         } catch (error) {
-            toast.error(error.message);
+            console.error("🔴 Signup fatal error:", error);
+            toast.error(error.message || "Signup failed");
             throw error;
         }
     };
 
     const login = async (email, password) => {
         try {
+            console.log("🔵 Attempting login for:", email);
+
             // 1. Try Standard Supabase Auth First
             const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
             if (!error && data.user) {
+                console.log("🟢 Auth successful:", data.user.id);
+
+                // Check if user exists in database
+                const { data: dbUser, error: dbError } = await supabase
+                    .from('users')
+                    .select('*')
+                    .eq('id', data.user.id)
+                    .single();
+
+                // If user doesn't exist in database, add them
+                if (dbError || !dbUser) {
+                    console.log("⚠️ User not in database, adding now...");
+                    const userRole = data.user.user_metadata?.role || 'Donor';
+                    const userName = data.user.user_metadata?.name || data.user.email.split('@')[0];
+
+                    try {
+                        const { error: insertError } = await supabase
+                            .from('users')
+                            .insert([{
+                                id: data.user.id,
+                                email: data.user.email,
+                                name: userName,
+                                role: userRole,
+                                points: data.user.user_metadata?.points || 0
+                            }]);
+
+                        if (insertError) {
+                            console.error("🔴 Failed to add user to database:", insertError);
+                        } else {
+                            console.log("🟢 User added to database successfully");
+                        }
+                    } catch (err) {
+                        console.error("🔴 Database insert exception:", err);
+                    }
+                }
+
                 await fetchUserRole(data.user);
                 toast.success("Logged in!");
                 return data;
             }
+
+            console.log("⚠️ Auth failed, trying DB fallback...");
 
             // 2. DB Fallback (Demo Mode)
             const { data: demoUser } = await supabase
@@ -189,6 +293,7 @@ export const AuthProvider = ({ children }) => {
             const targetUser = demoUser || (fallbackUsers[email] ? { ...fallbackUsers[email], email } : null);
 
             if (targetUser) {
+                console.log("🟢 Demo/Fallback user found:", targetUser.name);
                 const fakeUser = {
                     id: targetUser.id || 'demo-' + email,
                     email: email,
@@ -206,7 +311,8 @@ export const AuthProvider = ({ children }) => {
             throw error || new Error("Invalid credentials");
 
         } catch (error) {
-            console.error("Login fatal:", error);
+            console.error("🔴 Login fatal error:", error);
+            toast.error(error.message || "Login failed");
             throw error;
         }
     };

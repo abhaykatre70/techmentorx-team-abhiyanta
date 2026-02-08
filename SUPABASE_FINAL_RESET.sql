@@ -22,6 +22,7 @@ CREATE TABLE public.users (
   password text, -- STORED PLAIN TEXT FOR DEMO ONLY (NOT SECURE FOR PRODUCTION)
   name text,
   role text DEFAULT 'Donor', -- Donor, Volunteer, NGO
+  points integer DEFAULT 0, -- Gamification points
   created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -111,12 +112,12 @@ CREATE POLICY "Auth Update Tasks" ON public.tasks FOR UPDATE USING (true);
 -- 5. INSERT INDIAN DEMO DATA
 
 -- Users (Mock IDs with Password '123456')
-INSERT INTO public.users (id, email, password, name, role) VALUES 
-('d0c2c0e0-0000-0000-0000-000000000001', 'admin@ngo.org', '123456', 'Aditi Rao (Admin)', 'NGO'),
-('d0c2c0e0-0000-0000-0000-000000000002', 'rahul@volunteer.com', '123456', 'Rahul Sharma', 'Volunteer'),
-('d0c2c0e0-0000-0000-0000-000000000003', 'priya@donor.com', '123456', 'Priya Verma', 'Donor'),
-('d0c2c0e0-0000-0000-0000-000000000004', 'vikram@volunteer.com', '123456', 'Vikram Singh', 'Volunteer'),
-('d0c2c0e0-0000-0000-0000-000000000005', 'sneha@donor.com', '123456', 'Sneha Gupta', 'Donor');
+INSERT INTO public.users (id, email, password, name, role, points) VALUES 
+('d0c2c0e0-0000-0000-0000-000000000001', 'admin@ngo.org', '123456', 'Aditi Rao (Admin)', 'NGO', 120),
+('d0c2c0e0-0000-0000-0000-000000000002', 'rahul@volunteer.com', '123456', 'Rahul Sharma', 'Volunteer', 350),
+('d0c2c0e0-0000-0000-0000-000000000003', 'priya@donor.com', '123456', 'Priya Verma', 'Donor', 50),
+('d0c2c0e0-0000-0000-0000-000000000004', 'vikram@volunteer.com', '123456', 'Vikram Singh', 'Volunteer', 200),
+('d0c2c0e0-0000-0000-0000-000000000005', 'sneha@donor.com', '123456', 'Sneha Gupta', 'Donor', 100);
 
 -- Donations (Linked to Donors)
 INSERT INTO public.donations (donor_id, title, description, category, quantity, pickup_address, status) VALUES 
