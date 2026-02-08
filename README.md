@@ -1,4 +1,5 @@
 # 🎉 HELPING HAND - Community Impact Platform
+<!-- Deployment Trigger: Fresh build for Vercel settings -->
 
 [![Live Demo](https://img.shields.io/badge/Live-Demo-brightgreen?style=for-the-badge&logo=render)](https://techmentorx-team-abhiyanta.onrender.com/)
 
