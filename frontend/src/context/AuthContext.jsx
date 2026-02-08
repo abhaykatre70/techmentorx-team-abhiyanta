@@ -73,58 +73,42 @@ export const AuthProvider = ({ children }) => {
         }
 
         try {
-            // First, Always try to sync user to DB to ensure they exist
+            // 1. Set current user immediately with what we have (resilience)
+            const initialRole = user.user_metadata?.role || 'Donor';
+            setCurrentUser(user);
+            setUserRole(initialRole);
+
+            // 2. Resolve loading immediately so the screen isn't stuck biank
+            setLoading(false);
+
+            // 3. Background Sync (Don't await this, let it fail quietly)
             const syncData = {
                 id: user.id,
                 email: user.email,
                 full_name: user.user_metadata?.full_name || user.user_metadata?.name || user.email.split('@')[0],
-                role: user.user_metadata?.role || 'Donor',
+                role: initialRole,
                 points: user.user_metadata?.points || 0
             };
 
-            // Fetch profile - WITH TIMEOUT and RESILIENCE
-            console.log("🔄 Syncing user profile to DB...", syncData);
+            supabase.from('users').upsert(syncData, { onConflict: 'email' }).then(({ data, error }) => {
+                if (error) console.warn("Background sync warning:", error.message);
 
-            // Background Sync (Don't let DB issues block the whole app refresh)
-            const syncPromise = supabase.from('users').upsert(syncData, { onConflict: 'email' });
-
-            // Wait for sync but only for 2 seconds max
-            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Sync timeout')), 2000));
-
-            try {
-                await Promise.race([syncPromise, timeoutPromise]);
-            } catch (syncErr) {
-                console.warn("⚠️ Sync partially failed or took too long, proceeding anyway", syncErr);
-            }
-
-            const { data, error } = await supabase
-                .from('users')
-                .select('*')
-                .eq('id', user.id)
-                .maybeSingle();
-
-            let finalProfile = data;
-
-            if (!finalProfile && user.email) {
-                const { data: emailData } = await supabase.from('users').select('*').eq('email', user.email).single();
-                finalProfile = emailData;
-            }
-
-            const role = finalProfile?.role || user.user_metadata?.role || 'Donor';
-            setUserRole(role);
-
-            const merged = {
-                ...user,
-                ...finalProfile,
-                user_metadata: { ...user.user_metadata, ...finalProfile }
-            };
-            setCurrentUser(merged);
+                // If we got real data from the DB, update the role if it's different
+                if (!error) {
+                    supabase.from('users').select('role, points, full_name').eq('id', user.id).maybeSingle().then(({ data: dbUser }) => {
+                        if (dbUser) {
+                            setUserRole(dbUser.role);
+                            setCurrentUser(prev => ({
+                                ...prev,
+                                ...dbUser,
+                                user_metadata: { ...prev.user_metadata, ...dbUser }
+                            }));
+                        }
+                    });
+                }
+            });
         } catch (error) {
-            console.error("Role fetch error:", error);
-            // Fallback for session continuity
-            setCurrentUser(user);
-            setUserRole(user.user_metadata?.role || 'Donor');
-        } finally {
+            console.error("Critical role fetch error:", error);
             setLoading(false);
         }
     };
