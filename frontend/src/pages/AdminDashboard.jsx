@@ -1,12 +1,12 @@
 
 import React, { useState } from 'react';
 import {
-    Users, Package, TrendingUp, Activity,
-    CheckCircle, XCircle, AlertCircle, Calendar
+    Users, Package, Activity,
+    CheckCircle, XCircle, AlertCircle
 } from 'lucide-react';
 import {
-    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-    AreaChart, Area, PieChart, Pie, Cell
+    AreaChart, Area, PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
+    CartesianGrid, XAxis, YAxis
 } from 'recharts';
 import { motion } from 'framer-motion';
 

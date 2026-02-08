@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: techmentorx-frontend
+    env: static
+    buildCommand: npm install --include=dev && npm run build
+    staticPublishPath: ./frontend/dist
+    envVars:
+      - key: NODE_VERSION
+        value: 20

@@ -2,12 +2,18 @@
     "name": "helping-hand-monorepo",
     "version": "1.0.0",
     "private": true,
+    "workspaces": [
+        "frontend",
+        "backend"
+    ],
     "engines": {
         "node": ">=20.0.0"
     },
     "scripts": {
-        "install-all": "npm install && cd frontend && npm install",
-        "build": "cd frontend && npm install && npm run build",
-        "start": "cd frontend && npm run preview"
+        "install-all": "npm install",
+        "build": "npm run build --workspace=frontend",
+        "start": "npm run dev --workspace=frontend",
+        "lint": "npm run lint --workspace=frontend",
+        "preview": "npm run preview --workspace=frontend"
     }
 }

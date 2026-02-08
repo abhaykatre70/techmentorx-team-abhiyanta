@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../supabase';
-import { MapPin, Camera, AlertTriangle, Package, Users, Activity, CheckCircle, Clock, X, Gift, Search, Heart } from 'lucide-react';
+import { MapPin, Camera, Package, Users, Activity, CheckCircle, Clock, X, Gift, Search } from 'lucide-react';
 import CameraWithGPS from '../components/CameraWithGPS';
 import DonationForm from '../components/DonationForm'; // New Import
 import toast from 'react-hot-toast';
