@@ -198,24 +198,33 @@ const Dashboard = () => {
 
             console.log("📝 Inserting report into database...", reportData);
 
-            const { data: newReport, error: dbError } = await toast.promise(
+            let { data: newReport, error: dbError } = await toast.promise(
                 supabase.from('reports').insert([reportData]).select(),
                 {
                     loading: 'Saving report to database...',
                     success: 'Report saved successfully! 🟢',
-                    error: 'Failed to save to database 🔴'
+                    error: 'Database error. Retrying safely...'
                 }
             );
 
+            // FAILSAFE: If insert fails (likely due to user_id/sync issues), retry without user_id
             if (dbError) {
-                console.error('🔴 Database Insert Error details:', {
-                    message: dbError.message,
-                    code: dbError.code,
-                    details: dbError.details,
-                    hint: dbError.hint
-                });
-                throw dbError;
+                console.warn('🔴 First insert failed, retrying anonymously...', dbError.message);
+                const safeReportData = { ...reportData, user_id: null };
+
+                const { data: secondAttempt, error: secondError } = await supabase
+                    .from('reports')
+                    .insert([safeReportData])
+                    .select();
+
+                if (secondError) {
+                    console.error('🔴 Final Insert Error:', secondError);
+                    throw secondError;
+                }
+                newReport = secondAttempt;
+                console.log("🟢 Anonymous fallback successful");
             }
+
             console.log("🟢 Report inserted successfully:", newReport);
 
             // --- NOTIFICATION SYSTEM ---

@@ -82,22 +82,26 @@ export const AuthProvider = ({ children }) => {
                 points: user.user_metadata?.points || 0
             };
 
-            // Force Sync
+            // Fetch profile - WITH TIMEOUT and RESILIENCE
             console.log("🔄 Syncing user profile to DB...", syncData);
-            const { error: syncError } = await supabase.from('users').upsert(syncData, { onConflict: 'email' });
 
-            if (syncError) {
-                console.error("🔴 DB Sync Error in fetchUserRole:", syncError);
-            } else {
-                console.log("🟢 DB Sync Successful");
+            // Background Sync (Don't let DB issues block the whole app refresh)
+            const syncPromise = supabase.from('users').upsert(syncData, { onConflict: 'email' });
+
+            // Wait for sync but only for 2 seconds max
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Sync timeout')), 2000));
+
+            try {
+                await Promise.race([syncPromise, timeoutPromise]);
+            } catch (syncErr) {
+                console.warn("⚠️ Sync partially failed or took too long, proceeding anyway", syncErr);
             }
 
-            // Fetch profile
             const { data, error } = await supabase
                 .from('users')
                 .select('*')
                 .eq('id', user.id)
-                .single();
+                .maybeSingle();
 
             let finalProfile = data;
 
