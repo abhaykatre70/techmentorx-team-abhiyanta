@@ -17,25 +17,25 @@ export const AuthProvider = ({ children }) => {
 
         const initAuth = async () => {
             try {
-                // 1. Try LocalStorage (Persist Demo/Hardcoded Users)
-                const storedUser = localStorage.getItem('demo_user');
-                const storedRole = localStorage.getItem('demo_role');
+                // 1. Check Supabase Session First (Real Auth Priority)
+                const { data: { session } } = await supabase.auth.getSession();
 
-                if (storedUser && storedRole) {
+                if (session?.user) {
                     if (mounted) {
+                        await fetchUserRole(session.user);
+                    }
+                } else {
+                    // 2. Fallback to LocalStorage (For already logged in demo users)
+                    const storedUser = localStorage.getItem('demo_user');
+                    const storedRole = localStorage.getItem('demo_role');
+
+                    if (storedUser && storedRole && mounted) {
                         setCurrentUser(JSON.parse(storedUser));
                         setUserRole(storedRole);
                         setLoading(false);
+                    } else if (mounted) {
+                        setLoading(false);
                     }
-                    return;
-                }
-
-                // 2. Try Supabase Session
-                const { data: { session } } = await supabase.auth.getSession();
-                if (session?.user && mounted) {
-                    await fetchUserRole(session.user);
-                } else {
-                    if (mounted) setLoading(false);
                 }
             } catch (error) {
                 console.warn("Auth Init Error:", error);
@@ -48,16 +48,15 @@ export const AuthProvider = ({ children }) => {
         // Listen for Supabase changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
             if (mounted) {
-                // Only override if we DON'T have a forced local session
-                if (!localStorage.getItem('demo_user')) {
-                    if (session?.user) {
-                        await fetchUserRole(session.user);
-                    } else {
-                        setCurrentUser(null);
-                        setUserRole(null);
-                    }
+                if (session?.user) {
+                    await fetchUserRole(session.user);
+                } else if (!localStorage.getItem('demo_user')) {
+                    setCurrentUser(null);
+                    setUserRole(null);
+                    setLoading(false);
+                } else {
+                    setLoading(false);
                 }
-                setLoading(false);
             }
         });
 
@@ -68,34 +67,59 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
     const fetchUserRole = async (user) => {
+        if (!user) {
+            setLoading(false);
+            return;
+        }
+
         try {
-            // Try fetching profile from DB
-            const { data } = await supabase
+            // First, Always try to sync user to DB to ensure they exist
+            const syncData = {
+                id: user.id,
+                email: user.email,
+                full_name: user.user_metadata?.full_name || user.user_metadata?.name || user.email.split('@')[0],
+                role: user.user_metadata?.role || 'Donor',
+                points: user.user_metadata?.points || 0
+            };
+
+            // Force Sync
+            console.log("🔄 Syncing user profile to DB...", syncData);
+            const { error: syncError } = await supabase.from('users').upsert(syncData, { onConflict: 'email' });
+
+            if (syncError) {
+                console.error("🔴 DB Sync Error in fetchUserRole:", syncError);
+            } else {
+                console.log("🟢 DB Sync Successful");
+            }
+
+            // Fetch profile
+            const { data, error } = await supabase
                 .from('users')
                 .select('*')
                 .eq('id', user.id)
                 .single();
 
-            // If ID mismatch but email matches (common in dev resets), try email
-            let finalData = data;
-            if (!finalData && user.email) {
+            let finalProfile = data;
+
+            if (!finalProfile && user.email) {
                 const { data: emailData } = await supabase.from('users').select('*').eq('email', user.email).single();
-                if (emailData) finalData = emailData;
+                finalProfile = emailData;
             }
 
-            const role = finalData?.role || user.user_metadata?.role || 'Donor';
+            const role = finalProfile?.role || user.user_metadata?.role || 'Donor';
             setUserRole(role);
 
-            // Merge metadata
             const merged = {
                 ...user,
-                ...finalData,
-                user_metadata: { ...user.user_metadata, ...finalData }
+                ...finalProfile,
+                user_metadata: { ...user.user_metadata, ...finalProfile }
             };
             setCurrentUser(merged);
-
         } catch (error) {
             console.error("Role fetch error:", error);
+            // Fallback for session continuity
+            setCurrentUser(user);
+            setUserRole(user.user_metadata?.role || 'Donor');
         } finally {
             setLoading(false);
         }
@@ -112,30 +136,24 @@ export const AuthProvider = ({ children }) => {
         if (!currentUser) return;
         const newPoints = (currentUser.user_metadata?.points || 0) + pointsToAdd;
 
-        // Update Local State
         const updatedUser = {
             ...currentUser,
             user_metadata: { ...currentUser.user_metadata, points: newPoints }
         };
         persistSession(updatedUser, userRole);
 
-        toast.success(`+${pointsToAdd} Impact Points! 🌟`);
-
-        // Try DB Update
         try {
-            // If real ID, update DB
-            if (currentUser.id && !currentUser.id.toString().startsWith('demo') && !currentUser.id.toString().startsWith('hardcoded')) {
+            toast.success(`+${pointsToAdd} Impact Points! 🌟`);
+            if (currentUser.id && !currentUser.id.toString().startsWith('demo')) {
                 await supabase.from('users').update({ points: newPoints }).eq('id', currentUser.id);
             }
         } catch (e) {
-            console.warn("DB Point sync failed", e);
+            console.warn("Points sync failed", e);
         }
     };
 
     const signup = async (email, password, name, role) => {
         try {
-            console.log("🔵 Starting signup for:", email, "Role:", role);
-
             const { data, error } = await supabase.auth.signUp({
                 email,
                 password,
@@ -146,8 +164,7 @@ export const AuthProvider = ({ children }) => {
             });
 
             if (error) {
-                console.error("🔴 Signup error:", error);
-                if (error.message.includes("already registered") || error.message.includes("already been registered")) {
+                if (error.message.includes("already registered")) {
                     toast("User exists! Logging in...", { icon: '🔄' });
                     return await login(email, password);
                 }
@@ -155,68 +172,34 @@ export const AuthProvider = ({ children }) => {
             }
 
             if (data.user) {
-                console.log("🟢 User created in Auth:", data.user.id);
+                // Proactive cleanup from local storage if any
+                localStorage.removeItem('demo_user');
+                localStorage.removeItem('demo_role');
 
-                // Insert into users table
-                try {
-                    const { data: insertData, error: dbError } = await supabase
-                        .from('users')
-                        .insert([{
-                            id: data.user.id,
-                            email,
-                            name,
-                            role,
-                            points: 0
-                        }])
-                        .select()
-                        .single();
+                // Sync to DB
+                console.log("🔄 Registering new user in DB table...", data.user.id);
+                const { error: dbError } = await supabase.from('users').upsert([{
+                    id: data.user.id,
+                    email,
+                    password,
+                    full_name: name,
+                    role,
+                    points: 0
+                }], { onConflict: 'email' });
 
-                    if (dbError) {
-                        console.error("🔴 Database insert error:", dbError);
-                        // If insert fails, try upsert as fallback
-                        const { error: upsertError } = await supabase
-                            .from('users')
-                            .upsert([{
-                                id: data.user.id,
-                                email,
-                                name,
-                                role,
-                                points: 0
-                            }]);
-
-                        if (upsertError) {
-                            console.error("🔴 Upsert also failed:", upsertError);
-                        } else {
-                            console.log("🟢 User added to database via upsert");
-                        }
-                    } else {
-                        console.log("🟢 User added to database:", insertData);
-                    }
-                } catch (dbErr) {
-                    console.error("🔴 Database operation failed:", dbErr);
+                if (dbError) {
+                    console.error("🔴 Registration DB Sync Error:", dbError);
+                } else {
+                    console.log("🟢 Registration DB Sync Successful");
                 }
 
-                // Create user object with metadata
-                const userWithMetadata = {
-                    ...data.user,
-                    user_metadata: {
-                        name,
-                        role,
-                        points: 0
-                    }
-                };
+                toast.success("Account created! Check your email for verification. 🎉");
 
-                persistSession(userWithMetadata, role);
-                toast.success("Account created! Welcome aboard! 🎉");
-
-                // Navigate to dashboard after signup
-                setTimeout(() => {
-                    window.location.href = '/dashboard';
-                }, 1000);
+                // For demo simplicity, we log them in locally
+                await fetchUserRole(data.user);
             }
             return data;
         } catch (error) {
-            console.error("🔴 Signup fatal error:", error);
             toast.error(error.message || "Signup failed");
             throw error;
         }
@@ -224,106 +207,61 @@ export const AuthProvider = ({ children }) => {
 
     const login = async (email, password) => {
         try {
-            console.log("🔵 Attempting login for:", email);
+            // 1. CLEAR LOCAL STORAGE FIRST to avoid old demo session interference
+            localStorage.removeItem('demo_user');
+            localStorage.removeItem('demo_role');
 
-            // 1. Try Standard Supabase Auth First
             const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
             if (!error && data.user) {
-                console.log("🟢 Auth successful:", data.user.id);
-
-                // Check if user exists in database
-                const { data: dbUser, error: dbError } = await supabase
-                    .from('users')
-                    .select('*')
-                    .eq('id', data.user.id)
-                    .single();
-
-                // If user doesn't exist in database, add them
-                if (dbError || !dbUser) {
-                    console.log("⚠️ User not in database, adding now...");
-                    const userRole = data.user.user_metadata?.role || 'Donor';
-                    const userName = data.user.user_metadata?.name || data.user.email.split('@')[0];
-
-                    try {
-                        const { error: insertError } = await supabase
-                            .from('users')
-                            .insert([{
-                                id: data.user.id,
-                                email: data.user.email,
-                                name: userName,
-                                role: userRole,
-                                points: data.user.user_metadata?.points || 0
-                            }]);
-
-                        if (insertError) {
-                            console.error("🔴 Failed to add user to database:", insertError);
-                        } else {
-                            console.log("🟢 User added to database successfully");
-                        }
-                    } catch (err) {
-                        console.error("🔴 Database insert exception:", err);
-                    }
-                }
-
                 await fetchUserRole(data.user);
-                toast.success("Logged in!");
+                toast.success("Logged in successfully!");
                 return data;
             }
 
-            console.log("⚠️ Auth failed, trying DB fallback...");
-
-            // 2. DB Fallback (Demo Mode)
-            const { data: demoUser } = await supabase
+            // 2. ONLY IF AUTH FAILS, check if user exists in the DB with 'demo' password
+            // This allows the hardcoded SQL demo users to work without real Auth accounts
+            const { data: dbUser } = await supabase
                 .from('users')
                 .select('*')
                 .eq('email', email)
-                // .eq('password', password) // Relaxed password check for demo
                 .single();
 
-            // 3. Check Hardcoded List if DB fails or for speed
-            const fallbackUsers = {
-                'admin@ngo.org': { name: 'Aditi Rao', role: 'NGO', points: 120 },
-                'rahul@volunteer.com': { name: 'Rahul Sharma', role: 'Volunteer', points: 350 },
-                'priya@donor.com': { name: 'Priya Verma', role: 'Donor', points: 50 },
-                'vikram@volunteer.com': { name: 'Vikram Singh', role: 'Volunteer', points: 200 },
-                'sneha@donor.com': { name: 'Sneha Gupta', role: 'Donor', points: 100 }
-            };
-
-            const targetUser = demoUser || (fallbackUsers[email] ? { ...fallbackUsers[email], email } : null);
-
-            if (targetUser) {
-                console.log("🟢 Demo/Fallback user found:", targetUser.name);
+            if (dbUser && (password === 'pass' || password === 'demo' || password === 'pass123')) {
                 const fakeUser = {
-                    id: targetUser.id || 'demo-' + email,
+                    id: dbUser.id,
                     email: email,
                     user_metadata: {
-                        name: targetUser.name,
-                        role: targetUser.role,
-                        points: targetUser.points
+                        name: dbUser.full_name,
+                        role: dbUser.role,
+                        points: dbUser.points || 0
                     }
                 };
-                persistSession(fakeUser, targetUser.role);
-                toast.success(`Welcome ${targetUser.name} (Demo)`);
+                persistSession(fakeUser, dbUser.role);
+                toast.success(`Welcome back, ${dbUser.full_name}!`);
                 return { user: fakeUser };
             }
 
             throw error || new Error("Invalid credentials");
 
         } catch (error) {
-            console.error("🔴 Login fatal error:", error);
             toast.error(error.message || "Login failed");
             throw error;
         }
     };
 
     const logout = async () => {
-        localStorage.removeItem('demo_user');
-        localStorage.removeItem('demo_role');
-        await supabase.auth.signOut();
-        setCurrentUser(null);
-        setUserRole(null);
-        toast.success("Signed out");
+        try {
+            localStorage.clear();
+            await supabase.auth.signOut();
+            setCurrentUser(null);
+            setUserRole(null);
+            toast.success("Signed out successfully");
+            setTimeout(() => { window.location.href = '/login'; }, 100);
+        } catch (error) {
+            localStorage.clear();
+            window.location.href = '/login';
+        }
     };
 
     return (

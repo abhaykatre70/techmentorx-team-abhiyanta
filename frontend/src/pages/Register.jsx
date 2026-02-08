@@ -20,7 +20,7 @@ const Register = () => {
         email: '',
         password: '',
         fullName: '',
-        role: 'donor'
+        role: 'Donor'
     });
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
@@ -164,9 +164,9 @@ const Register = () => {
                                                     sx={{ borderRadius: 3 }}
                                                     startAdornment={<InputAdornment position="start"><GroupIcon sx={{ ml: 1 }} color="action" /></InputAdornment>}
                                                 >
-                                                    <MenuItem value="donor">Donor (I have resources to give)</MenuItem>
-                                                    <MenuItem value="volunteer">Volunteer (I want to transport goods)</MenuItem>
-                                                    <MenuItem value="beneficiary">Beneficiary (I am seeking help)</MenuItem>
+                                                    <MenuItem value="Donor">Donor (I have resources to give)</MenuItem>
+                                                    <MenuItem value="Volunteer">Volunteer (I want to transport goods)</MenuItem>
+                                                    <MenuItem value="Beneficiary">Beneficiary (I am seeking help)</MenuItem>
                                                 </Select>
                                             </FormControl>
                                         </Grid>
