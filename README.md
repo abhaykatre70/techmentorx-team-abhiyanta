@@ -1,9 +1,9 @@
 # 🎉 HELPING HAND - Community Impact Platform
 <!-- Deployment Trigger: Fresh build for Vercel settings -->
 
-[![Live Demo](https://img.shields.io/badge/Live-Demo-brightgreen?style=for-the-badge&logo=render)](https://techmentorx-team-abhiyanta.onrender.com/)
+[![Live Demo](https://img.shields.io/badge/Live-Demo-brightgreen?style=for-the-badge&logo=vercel)](https://techmentorx-team-abhiyanta-frontend.vercel.app/)
 
-🚀 **Live Deployment:** [https://techmentorx-team-abhiyanta.onrender.com/](https://techmentorx-team-abhiyanta.onrender.com/)
+🚀 **Live Deployment:** [https://techmentorx-team-abhiyanta-frontend.vercel.app/](https://techmentorx-team-abhiyanta-frontend.vercel.app/)
 
 ---
 
@@ -31,7 +31,7 @@ Our platform is built using modern, scalable technologies to ensure high perform
 - **Database**: Supabase (PostgreSQL) with Real-time triggers
 - **Map Engine**: React Simple Maps / Leaflet for Geotagged Visualization
 - **Authentication**: JWT & Supabase Auth
-- **Deployment**: Render (Static + Web Services)
+- **Deployment**: Vercel (Frontend)
 
 ---
 

@@ -197,14 +197,23 @@ const Dashboard = () => {
             };
 
             console.log("📝 Inserting report into database...", reportData);
-            const { data: newReport, error: dbError } = await supabase.from('reports').insert([reportData]).select();
+
+            const { data: newReport, error: dbError } = await toast.promise(
+                supabase.from('reports').insert([reportData]).select(),
+                {
+                    loading: 'Saving report to database...',
+                    success: 'Report saved successfully! 🟢',
+                    error: 'Failed to save to database 🔴'
+                }
+            );
 
             if (dbError) {
-                console.error('🔴 Database Insert Error:', dbError);
-                // Hint for common error
-                if (dbError.code === '23503') {
-                    console.warn("Hint: Foreign key violation. This usually means the user_id doesn't exist in the users table.");
-                }
+                console.error('🔴 Database Insert Error details:', {
+                    message: dbError.message,
+                    code: dbError.code,
+                    details: dbError.details,
+                    hint: dbError.hint
+                });
                 throw dbError;
             }
             console.log("🟢 Report inserted successfully:", newReport);
