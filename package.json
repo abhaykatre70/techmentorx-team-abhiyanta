@@ -10,7 +10,7 @@
         "node": ">=20.0.0"
     },
     "scripts": {
-        "install-all": "npm install",
+        "install-all": "npm install --legacy-peer-deps",
         "build": "npm run build --workspace=frontend",
         "start": "npm run dev --workspace=frontend",
         "lint": "npm run lint --workspace=frontend",
