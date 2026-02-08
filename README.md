@@ -216,6 +216,44 @@ frontend/
 
 ---
 
+## 🚀 Deploy to Render
+
+### Quick Deployment Steps
+
+1. **Push to GitHub** (if not already done)
+   ```bash
+   git add .
+   git commit -m "Ready for deployment"
+   git push origin main
+   ```
+
+2. **Create Static Site on Render**
+   - Go to https://dashboard.render.com
+   - Click **"New +"** → **"Static Site"**
+   - Connect your GitHub repository
+   - Configure settings:
+     - **Name:** `techmentorx-frontend`
+     - **Branch:** `main`
+     - **Root Directory:** `frontend`
+     - **Build Command:** `npm install && npm run build`
+     - **Publish Directory:** `dist`
+   - Click **"Create Static Site"**
+
+3. **Wait for Deployment** (2-5 minutes)
+   - You'll get a URL like: `https://techmentorx-frontend.onrender.com`
+
+4. **Test Your Live App**
+   - Login with demo credentials
+   - All features work (Camera/GPS require HTTPS - provided by Render)
+
+### Features Included
+- ✅ Free HTTPS & SSL certificate
+- ✅ Auto-deploy on Git push
+- ✅ Global CDN
+- ✅ 100 GB bandwidth/month (free tier)
+
+---
+
 ## 📞 Support
 
 If you encounter issues:
